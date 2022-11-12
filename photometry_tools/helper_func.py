@@ -105,3 +105,64 @@ def get_img_cutout(img, wcs, coord, cutout_size):
         cut_out.data = None
         cut_out.wcs = None
         return cut_out
+
+
+def download_file(file_path, url, unpack=False, reload=False):
+    """
+
+    Parameters
+    ----------
+    file_path : str or ``pathlib.Path``
+    url : str
+    unpack : bool
+        In case the downloaded file is zipped, this function can unpack it and remove the downloaded file,
+        leaving only the extracted file
+    reload : bool
+        If the file is corrupted, this removes the file and reloads it
+
+    Returns
+    -------
+
+    """
+    if reload:
+        # if reload file the file will be removed to re download it
+        os.remove(file_path)
+    # check if file already exists
+    if os.path.isfile(file_path):
+        print(file_path, 'already exists')
+        return True
+    else:
+        from urllib3 import PoolManager
+        # download file
+        http = PoolManager()
+        r = http.request('GET', url, preload_content=False)
+
+        if unpack:
+            with open(file_path.with_suffix(".gz"), 'wb') as out:
+                while True:
+                    data = r.read()
+                    if not data:
+                        break
+                    out.write(data)
+            r.release_conn()
+            # uncompress file
+            from gzip import GzipFile
+            # read compressed file
+            compressed_file = GzipFile(file_path.with_suffix(".gz"), 'rb')
+            s = compressed_file.read()
+            compressed_file.close()
+            # save compressed file
+            uncompressed_file = open(file_path, 'wb')
+            uncompressed_file.write(s)
+            uncompressed_file.close()
+            # delete compressed file
+            os.remove(file_path.with_suffix(".gz"))
+        else:
+            with open(file_path, 'wb') as out:
+                while True:
+                    data = r.read()
+                    if not data:
+                        break
+                    out.write(data)
+            r.release_conn()
+

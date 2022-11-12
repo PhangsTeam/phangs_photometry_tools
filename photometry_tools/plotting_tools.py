@@ -4,332 +4,251 @@ Plotting tools for photometry and SED fitting
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colorbar import ColorbarBase
+from matplotlib.colors import Normalize, LogNorm
+
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from astropy.visualization.wcsaxes import SphericalCircle
 
 
 class PlotPhotometry:
+    """
+    class to plot all kinds of photometric presentations
+    """
 
     @staticmethod
-    def plot_multi_zoom_panel_hst_nircam_miri(hst_band_list,
-                                              nircam_band_list,
-                                              miri_band_list,
-                                              cutout_dict,
-                                              circ_pos=False, circ_rad=0.5,
-                                              fontsize=20, figsize=(18, 13),
-                                              vmax_hst=None, vmax_nircam=None, vmax_miri=None,
-                                              ticks_hst=None, ticks_nircam=None, ticks_miri=None,
-                                              cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
-                                              log_scale=False,
-                                              name_ra_offset=2.4, name_dec_offset=1.5,
-                                              ra_tick_num=3, dec_tick_num=3):
+    def plot_cutout_panel_hst_nircam_miri(hst_band_list, nircam_band_list, miri_band_list, cutout_dict,
+                                          circ_pos=None, circ_rad=None, circ_color=None,
+                                          fontsize=18, figsize=(18, 13),
+                                          vmax_vmin_hst=None, vmax_vmin_nircam=None, vmax_vmin_miri=None,
+                                          ticks_hst=None, ticks_nircam=None, ticks_miri=None,
+                                          cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
+                                          log_scale=False, axis_length=None,
+                                          ra_tick_num=3, dec_tick_num=3):
 
-        if vmax_hst is None:
-            vmax_hst = np.max([cutout_dict['%s_img_cutout' % band].data for band in hst_band_list])
-        if vmax_nircam is None:
-            vmax_nircam = np.max([cutout_dict['%s_img_cutout' % band].data for band in nircam_band_list])
-        if vmax_miri is None:
-            vmax_miri = np.max([cutout_dict['%s_img_cutout' % band].data for band in miri_band_list])
+
+        norm_hst = compute_cbar_norm(vmax_vmin=vmax_vmin_hst,
+                                     cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in hst_band_list],
+                                     log_scale=log_scale)
+        norm_nircam = compute_cbar_norm(vmax_vmin=vmax_vmin_nircam,
+                                        cutout_list=[cutout_dict['%s_img_cutout' % band].data
+                                                     for band in nircam_band_list], log_scale=log_scale)
+        norm_miri = compute_cbar_norm(vmax_vmin=vmax_vmin_miri,
+                                      cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in miri_band_list],
+                                      log_scale=log_scale)
+        if log_scale:
+            cbar_label = r'log(S /[MJy / sr])'
+        else:
+            cbar_label = r'S [MJy / sr]'
 
         # build up a figure
         figure = plt.figure(figsize=figsize)
 
-        for hst_band in hst_band_list:
-
-
-        ax_hst_f275w = figure.add_axes([0.0, 0.67, 0.3, 0.3], projection=cutout_hst_f275w.wcs)
-        ax_hst_f438w = figure.add_axes([0.22, 0.67, 0.3, 0.3], projection=cutout_hst_f438w.wcs)
-        ax_hst_f555w = figure.add_axes([0.44, 0.67, 0.3, 0.3], projection=cutout_hst_f555w.wcs)
-        ax_hst_f814w = figure.add_axes([0.66, 0.67, 0.3, 0.3], projection=cutout_hst_f814w.wcs)
         ax_color_bar_hst = figure.add_axes([0.925, 0.68, 0.015, 0.28])
-
-        ax_jwst_f200w = figure.add_axes([0.0, 0.365, 0.3, 0.3], projection=cutout_jwst_f200w.wcs)
-        ax_jwst_f300m = figure.add_axes([0.22, 0.365, 0.3, 0.3], projection=cutout_jwst_f300m.wcs)
-        ax_jwst_f335m = figure.add_axes([0.44, 0.365, 0.3, 0.3], projection=cutout_jwst_f335m.wcs)
-        ax_jwst_f360m = figure.add_axes([0.66, 0.365, 0.3, 0.3], projection=cutout_jwst_f360m.wcs)
         ax_color_bar_nircam = figure.add_axes([0.925, 0.375, 0.015, 0.28])
-
-        ax_jwst_f770w = figure.add_axes([0.0, 0.06, 0.3, 0.3], projection=cutout_jwst_f770w.wcs)
-        ax_jwst_f1000w = figure.add_axes([0.22, 0.06, 0.3, 0.3], projection=cutout_jwst_f1000w.wcs)
-        ax_jwst_f1130w = figure.add_axes([0.44, 0.06, 0.3, 0.3], projection=cutout_jwst_f1130w.wcs)
-        ax_jwst_f2100w = figure.add_axes([0.66, 0.06, 0.3, 0.3], projection=cutout_jwst_f2100w.wcs)
         ax_color_bar_miri = figure.add_axes([0.925, 0.07, 0.015, 0.28])
 
-        if log_scale:
-            cb_hst = ax_hst_f275w.imshow(np.log10(cutout_hst_f275w.data), vmin=np.log10(vmax_hst/100),
-                                         vmax=np.log10(vmax_hst), cmap=cmap_hst)
-            ax_hst_f438w.imshow(np.log10(cutout_hst_f438w.data), vmin=np.log10(vmax_hst/100), vmax=np.log10(vmax_hst),
-                                cmap=cmap_hst)
-            ax_hst_f555w.imshow(np.log10(cutout_hst_f555w.data), vmin=np.log10(vmax_hst/100), vmax=np.log10(vmax_hst),
-                                cmap=cmap_hst)
-            ax_hst_f814w.imshow(np.log10(cutout_hst_f814w.data), vmin=np.log10(vmax_hst/100), vmax=np.log10(vmax_hst),
-                                cmap=cmap_hst)
-
-            cb_nircam = ax_jwst_f200w.imshow(np.log10(cutout_jwst_f200w.data), vmin=np.log10(vmax_nircam/100),
-                                             vmax=np.log10(vmax_nircam), cmap=cmap_nircam)
-            ax_jwst_f300m.imshow(np.log10(cutout_jwst_f300m.data), vmin=np.log10(vmax_nircam/100),
-                                 vmax=np.log10(vmax_nircam), cmap=cmap_nircam)
-            ax_jwst_f335m.imshow(np.log10(cutout_jwst_f335m.data), vmin=np.log10(vmax_nircam/100),
-                                 vmax=np.log10(vmax_nircam), cmap=cmap_nircam)
-            ax_jwst_f360m.imshow(np.log10(cutout_jwst_f360m.data), vmin=np.log10(vmax_nircam/100),
-                                 vmax=np.log10(vmax_nircam), cmap=cmap_nircam)
-
-            cb_miri = ax_jwst_f770w.imshow(np.log10(cutout_jwst_f770w.data), vmin=np.log10(vmax_miri/100),
-                                           vmax=np.log10(vmax_miri), cmap=cmap_miri)
-            ax_jwst_f1000w.imshow(np.log10(cutout_jwst_f1000w.data), vmin=np.log10(vmax_miri/100),
-                                  vmax=np.log10(vmax_miri), cmap=cmap_miri)
-            ax_jwst_f1130w.imshow(np.log10(cutout_jwst_f1130w.data), vmin=np.log10(vmax_miri/100),
-                                  vmax=np.log10(vmax_miri), cmap=cmap_miri)
-            ax_jwst_f2100w.imshow(np.log10(cutout_jwst_f2100w.data), vmin=np.log10(vmax_miri/100),
-                                  vmax=np.log10(vmax_miri), cmap=cmap_miri)
-            colorbar_label = r'log(S /[MJy / sr])'
-        else:
-            cb_hst = ax_hst_f275w.imshow(cutout_hst_f275w.data, vmin=-vmax_hst/10, vmax=vmax_hst, cmap=cmap_hst)
-            ax_hst_f438w.imshow(cutout_hst_f438w.data, vmin=-vmax_hst/10, vmax=vmax_hst, cmap=cmap_hst)
-            ax_hst_f555w.imshow(cutout_hst_f555w.data, vmin=-vmax_hst/10, vmax=vmax_hst, cmap=cmap_hst)
-            ax_hst_f814w.imshow(cutout_hst_f814w.data, vmin=-vmax_hst/10, vmax=vmax_hst, cmap=cmap_hst)
-
-            cb_nircam = ax_jwst_f200w.imshow(cutout_jwst_f200w.data, vmin=-vmax_nircam/10, vmax=vmax_nircam,
-                                             cmap=cmap_nircam)
-            ax_jwst_f300m.imshow(cutout_jwst_f300m.data, vmin=-vmax_nircam/10, vmax=vmax_nircam, cmap=cmap_nircam)
-            ax_jwst_f335m.imshow(cutout_jwst_f335m.data, vmin=-vmax_nircam/10, vmax=vmax_nircam, cmap=cmap_nircam)
-            ax_jwst_f360m.imshow(cutout_jwst_f360m.data, vmin=-vmax_nircam/10, vmax=vmax_nircam, cmap=cmap_nircam)
-
-            cb_miri = ax_jwst_f770w.imshow(cutout_jwst_f770w.data, vmin=-vmax_miri/10, vmax=vmax_miri, cmap=cmap_miri)
-            ax_jwst_f1000w.imshow(cutout_jwst_f1000w.data, vmin=-vmax_miri/10, vmax=vmax_miri, cmap=cmap_miri)
-            ax_jwst_f1130w.imshow(cutout_jwst_f1130w.data, vmin=-vmax_miri/10, vmax=vmax_miri, cmap=cmap_miri)
-            ax_jwst_f2100w.imshow(cutout_jwst_f2100w.data, vmin=-vmax_miri/10, vmax=vmax_miri, cmap=cmap_miri)
-            colorbar_label = r'S [MJy / sr]'
-
-
-        figure.colorbar(cb_hst, cax=ax_color_bar_hst, ticks=ticks_hst, orientation='vertical')
-        ax_color_bar_hst.set_ylabel(colorbar_label, labelpad=2, fontsize=fontsize)
-        ax_color_bar_hst.tick_params(axis='both', which='both', width=2, direction='in', top=True, labelbottom=False,
-                                     labeltop=True, labelsize=fontsize)
-
-        figure.colorbar(cb_nircam, cax=ax_color_bar_nircam, ticks=ticks_nircam, orientation='vertical')
-        ax_color_bar_nircam.set_ylabel(colorbar_label, labelpad=2, fontsize=fontsize)
-        ax_color_bar_nircam.tick_params(axis='both', which='both', width=2, direction='in', top=True, labelbottom=False,
-                                        labeltop=True, labelsize=fontsize)
-
-        figure.colorbar(cb_miri, cax=ax_color_bar_miri, ticks=ticks_miri, orientation='vertical')
-        ax_color_bar_miri.set_ylabel(colorbar_label, labelpad=18, fontsize=fontsize)
-        ax_color_bar_miri.tick_params(axis='both', which='both', width=2, direction='in', top=True, labelbottom=False,
-                                      labeltop=True, labelsize=fontsize)
-
-        VisualizeHelper.set_lim2cutout(ax=ax_hst_f275w, cutout=cutout_hst_f275w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_hst_f438w, cutout=cutout_hst_f438w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_hst_f555w, cutout=cutout_hst_f555w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_hst_f814w, cutout=cutout_hst_f814w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f200w, cutout=cutout_jwst_f200w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f300m, cutout=cutout_jwst_f300m, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f335m, cutout=cutout_jwst_f335m, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f360m, cutout=cutout_jwst_f360m, cutout_pos=cutout_pos, edge_cut_ratio=100)
-
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f770w, cutout=cutout_jwst_f770w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f1000w, cutout=cutout_jwst_f1000w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f1130w, cutout=cutout_jwst_f1130w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-        VisualizeHelper.set_lim2cutout(ax=ax_jwst_f2100w, cutout=cutout_jwst_f2100w, cutout_pos=cutout_pos, edge_cut_ratio=100)
-
-        if circ_pos:
-            VisualizeHelper.plot_coord_circle(ax_hst_f275w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_hst_f438w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_hst_f555w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_hst_f814w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f200w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f300m, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f335m, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f360m, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f770w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f1000w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f1130w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-            VisualizeHelper.plot_coord_circle(ax_jwst_f2100w, position=circ_pos, radius=circ_rad*u.arcsec, color='k')
-
-
-        text = cutout_hst_f275w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_hst_f275w.text(text[0], text[1], hst_channel_list[0], color='k', fontsize=fontsize+2)
-
-        text = cutout_hst_f438w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_hst_f438w.text(text[0], text[1], hst_channel_list[1], color='k', fontsize=fontsize+2)
-
-        text = cutout_hst_f555w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_hst_f555w.text(text[0], text[1], hst_channel_list[2], color='k', fontsize=fontsize+2)
-
-        text = cutout_hst_f814w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_hst_f814w.text(text[0], text[1], hst_channel_list[3], color='k', fontsize=fontsize+2)
-
-
-        text = cutout_jwst_f200w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f200w.text(text[0], text[1], nircam_channel_list[0], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f300m.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f300m.text(text[0], text[1], nircam_channel_list[1], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f335m.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f335m.text(text[0], text[1], nircam_channel_list[2], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f360m.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f360m.text(text[0], text[1], nircam_channel_list[3], color='k', fontsize=fontsize+2)
-
-
-        text = cutout_jwst_f770w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f770w.text(text[0], text[1], miri_channel_list[0], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f1000w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f1000w.text(text[0], text[1], miri_channel_list[1], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f1130w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f1130w.text(text[0], text[1], miri_channel_list[2], color='k', fontsize=fontsize+2)
-
-        text = cutout_jwst_f2100w.wcs.world_to_pixel(SkyCoord(cutout_pos.ra+name_ra_offset*u.arcsec, cutout_pos.dec+name_dec_offset*u.arcsec))
-        ax_jwst_f2100w.text(text[0], text[1], miri_channel_list[3], color='k', fontsize=fontsize+2)
-
-
-        ax_hst_f275w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_hst_f438w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_hst_f555w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_hst_f814w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f200w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f300m.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f335m.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f360m.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f770w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f1000w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f1130w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-        ax_jwst_f2100w.tick_params(axis='both', which='both', width=3, length=7, direction='in', color='k', labelsize=fontsize-1)
-
-
-
-        ax_hst_f275w.coords['dec'].set_ticklabel(rotation=90)
-        ax_hst_f275w.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-        ax_jwst_f200w.coords['dec'].set_ticklabel(rotation=90)
-        ax_jwst_f200w.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-        ax_jwst_f770w.coords['dec'].set_ticklabel(rotation=90)
-        ax_jwst_f770w.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-
-        ax_jwst_f770w.coords['ra'].set_ticklabel(rotation=0)
-        ax_jwst_f770w.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-        ax_jwst_f1000w.coords['ra'].set_ticklabel(rotation=0)
-        ax_jwst_f1000w.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-        ax_jwst_f1130w.coords['ra'].set_ticklabel(rotation=0)
-        ax_jwst_f1130w.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-        ax_jwst_f2100w.coords['ra'].set_ticklabel(rotation=0)
-        ax_jwst_f2100w.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize)
-
-
-        ax_hst_f275w.coords['ra'].set_ticklabel_visible(False)
-        ax_hst_f275w.coords['ra'].set_axislabel(' ')
-
-        ax_hst_f438w.coords['ra'].set_ticklabel_visible(False)
-        ax_hst_f438w.coords['ra'].set_axislabel(' ')
-
-        ax_hst_f555w.coords['ra'].set_ticklabel_visible(False)
-        ax_hst_f555w.coords['ra'].set_axislabel(' ')
-
-        ax_hst_f814w.coords['ra'].set_ticklabel_visible(False)
-        ax_hst_f814w.coords['ra'].set_axislabel(' ')
-
-
-        ax_jwst_f200w.coords['ra'].set_ticklabel_visible(False)
-        ax_jwst_f200w.coords['ra'].set_axislabel(' ')
-
-        ax_jwst_f300m.coords['ra'].set_ticklabel_visible(False)
-        ax_jwst_f300m.coords['ra'].set_axislabel(' ')
-
-        ax_jwst_f335m.coords['ra'].set_ticklabel_visible(False)
-        ax_jwst_f335m.coords['ra'].set_axislabel(' ')
-
-        ax_jwst_f360m.coords['ra'].set_ticklabel_visible(False)
-        ax_jwst_f360m.coords['ra'].set_axislabel(' ')
-
-
-        ax_hst_f438w.coords['dec'].set_ticklabel_visible(False)
-        ax_hst_f438w.coords['dec'].set_axislabel(' ')
-
-        ax_hst_f555w.coords['dec'].set_ticklabel_visible(False)
-        ax_hst_f555w.coords['dec'].set_axislabel(' ')
-
-        ax_hst_f814w.coords['dec'].set_ticklabel_visible(False)
-        ax_hst_f814w.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f300m.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f300m.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f335m.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f335m.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f360m.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f360m.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f1000w.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f1000w.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f1130w.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f1130w.coords['dec'].set_axislabel(' ')
-
-        ax_jwst_f2100w.coords['dec'].set_ticklabel_visible(False)
-        ax_jwst_f2100w.coords['dec'].set_axislabel(' ')
-
-
-
-        ax_hst_f275w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_hst_f438w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_hst_f555w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_hst_f814w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f200w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f300m.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f335m.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f360m.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f770w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f1000w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f1130w.coords['ra'].set_ticks(number=ra_tick_num)
-        ax_jwst_f2100w.coords['ra'].set_ticks(number=ra_tick_num)
-
-        ax_hst_f275w.coords['ra'].display_minor_ticks(True)
-        ax_hst_f438w.coords['ra'].display_minor_ticks(True)
-        ax_hst_f555w.coords['ra'].display_minor_ticks(True)
-        ax_hst_f814w.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f200w.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f300m.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f335m.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f360m.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f770w.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f1000w.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f1130w.coords['ra'].display_minor_ticks(True)
-        ax_jwst_f2100w.coords['ra'].display_minor_ticks(True)
-
-
-        ax_hst_f275w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_hst_f438w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_hst_f555w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_hst_f814w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f200w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f300m.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f335m.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f360m.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f770w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f1000w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f1130w.coords['dec'].set_ticks(number=dec_tick_num)
-        ax_jwst_f2100w.coords['dec'].set_ticks(number=dec_tick_num)
-
-
-        ax_hst_f275w.coords['dec'].display_minor_ticks(True)
-        ax_hst_f438w.coords['dec'].display_minor_ticks(True)
-        ax_hst_f555w.coords['dec'].display_minor_ticks(True)
-        ax_hst_f814w.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f200w.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f300m.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f335m.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f360m.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f770w.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f1000w.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f1130w.coords['dec'].display_minor_ticks(True)
-        ax_jwst_f2100w.coords['dec'].display_minor_ticks(True)
+        for hst_band, index in zip(hst_band_list, range(len(hst_band_list))):
+            ax = figure.add_axes([0.01 + index * 0.176, 0.70, 0.24, 0.24],
+                                 projection=cutout_dict['%s_img_cutout' % hst_band].wcs)
+
+            ax.imshow(cutout_dict['%s_img_cutout' % hst_band].data, norm=norm_hst, cmap=cmap_hst)
+            set_lim2cutout(ax=ax, cutout=cutout_dict['%s_img_cutout' % hst_band], cutout_pos=cutout_dict['cutout_pos'],
+                           ra_length=axis_length[0], dec_length=axis_length[1])
+            if circ_pos:
+                if isinstance(circ_pos, list):
+                    for pos, rad, color in zip(circ_pos, circ_rad, circ_color):
+                        plot_coord_circle(ax, position=pos, radius=rad*u.arcsec, color=color)
+                else:
+                    plot_coord_circle(ax, position=circ_pos, radius=circ_rad*u.arcsec, color=circ_color)
+            data_shape = cutout_dict['%s_img_cutout' % hst_band].data.shape
+            ax.text(data_shape[0] * 0.1, data_shape[1] * 0.85, hst_band, color='k', fontsize=fontsize+2)
+            ax.tick_params(axis='both', which='both', width=1.5, length=7, direction='in', color='k', labelsize=fontsize-1)
+            if index == 0:
+                ax.coords['dec'].set_ticklabel(rotation=90)
+                ax.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
+            else:
+                ax.coords['dec'].set_ticklabel_visible(False)
+                ax.coords['dec'].set_axislabel(' ')
+            ax.coords['ra'].set_ticklabel_visible(False)
+            ax.coords['ra'].set_axislabel(' ')
+            ax.coords['ra'].set_ticks(number=ra_tick_num)
+            ax.coords['ra'].display_minor_ticks(True)
+            ax.coords['dec'].set_ticks(number=dec_tick_num)
+            ax.coords['dec'].display_minor_ticks(True)
+
+        create_cbar(ax_cbar=ax_color_bar_hst, cmap=cmap_hst, norm=norm_hst, cbar_label=cbar_label, fontsize=fontsize,
+                    ticks=ticks_hst)
+
+        for nircam_band, index in zip(nircam_band_list, range(len(nircam_band_list))):
+            ax = figure.add_axes([0.0 + index * 0.22, 0.365, 0.3, 0.3],
+                                 projection=cutout_dict['%s_img_cutout' % nircam_band].wcs)
+            ax.imshow(cutout_dict['%s_img_cutout' % nircam_band].data, norm=norm_nircam, cmap=cmap_nircam)
+            if circ_pos:
+                if isinstance(circ_pos, list):
+                    for pos, rad, color in zip(circ_pos, circ_rad, circ_color):
+                        plot_coord_circle(ax, position=pos, radius=rad*u.arcsec, color=color)
+                else:
+                    plot_coord_circle(ax, position=circ_pos, radius=circ_rad*u.arcsec, color=circ_color)
+            data_shape = cutout_dict['%s_img_cutout' % nircam_band].data.shape
+            ax.text(data_shape[0] * 0.1, data_shape[1] * 0.85, nircam_band, color='k', fontsize=fontsize+2)
+            ax.tick_params(axis='both', which='both', width=1.5, length=7, direction='in', color='k', labelsize=fontsize-1)
+            set_lim2cutout(ax=ax, cutout=cutout_dict['%s_img_cutout' % nircam_band], cutout_pos=cutout_dict['cutout_pos'],
+                           ra_length=axis_length[0], dec_length=axis_length[1])
+            if index == 0:
+                ax.coords['dec'].set_ticklabel(rotation=90)
+                ax.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
+            else:
+                ax.coords['dec'].set_ticklabel_visible(False)
+                ax.coords['dec'].set_axislabel(' ')
+            ax.coords['ra'].set_ticklabel_visible(False)
+            ax.coords['ra'].set_axislabel(' ')
+            ax.coords['ra'].set_ticks(number=ra_tick_num)
+            ax.coords['ra'].display_minor_ticks(True)
+            ax.coords['dec'].set_ticks(number=dec_tick_num)
+            ax.coords['dec'].display_minor_ticks(True)
+        create_cbar(ax_cbar=ax_color_bar_nircam, cmap=cmap_nircam, norm=norm_nircam, cbar_label=cbar_label, fontsize=fontsize,
+                    ticks=ticks_nircam, labelpad=2, tick_width=2, orientation='vertical', extend='neither')
+
+        for miri_band, index in zip(miri_band_list, range(len(miri_band_list))):
+            ax = figure.add_axes([0.0 + index * 0.22, 0.06, 0.3, 0.3],
+                                 projection=cutout_dict['%s_img_cutout' % miri_band].wcs)
+            ax.imshow(cutout_dict['%s_img_cutout' % miri_band].data, norm=norm_miri, cmap=cmap_miri)
+            if circ_pos:
+                if isinstance(circ_pos, list):
+                    for pos, rad, color in zip(circ_pos, circ_rad, circ_color):
+                        plot_coord_circle(ax, position=pos, radius=rad*u.arcsec, color=color)
+                else:
+                    plot_coord_circle(ax, position=circ_pos, radius=circ_rad*u.arcsec, color=circ_color)
+            data_shape = cutout_dict['%s_img_cutout' % miri_band].data.shape
+            ax.text(data_shape[0] * 0.1, data_shape[1] * 0.85, miri_band, color='k', fontsize=fontsize+2)
+            ax.tick_params(axis='both', which='both', width=1.5, length=7, direction='in', color='k', labelsize=fontsize-1)
+            set_lim2cutout(ax=ax, cutout=cutout_dict['%s_img_cutout' % miri_band], cutout_pos=cutout_dict['cutout_pos'],
+                           ra_length=axis_length[0], dec_length=axis_length[1])
+            if index == 0:
+                ax.coords['dec'].set_ticklabel(rotation=90)
+                ax.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.8, fontsize=fontsize)
+            else:
+                ax.coords['dec'].set_ticklabel_visible(False)
+                ax.coords['dec'].set_axislabel(' ')
+            ax.coords['ra'].set_ticklabel(rotation=0)
+            ax.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize)
+            ax.coords['ra'].set_ticks(number=ra_tick_num)
+            ax.coords['ra'].display_minor_ticks(True)
+            ax.coords['dec'].set_ticks(number=dec_tick_num)
+            ax.coords['dec'].display_minor_ticks(True)
+
+        create_cbar(ax_cbar=ax_color_bar_miri, cmap=cmap_miri, norm=norm_miri, cbar_label=cbar_label, fontsize=fontsize,
+                    ticks=ticks_miri, labelpad=2, tick_width=1.5, orientation='vertical', extend='neither')
 
         return figure
+
+
+def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
+    """
+    Computing the color bar scale for a single or multiple cutouts.
+
+    Parameters
+    ----------
+    vmax_vmin : tuple
+    cutout_list : list
+        This list should include all cutouts
+    log_scale : bool
+
+    Returns
+    -------
+    norm : ``matplotlib.colors.Normalize``  or ``matplotlib.colors.LogNorm``
+    """
+    if (vmax_vmin is None) & (cutout_list is None):
+        raise KeyError('either vmax_vmin or cutout_list must be not None')
+
+    # get maximal value
+    if vmax_vmin is None:
+        list_of_means = [np.mean(cutout) for cutout in cutout_list]
+        list_of_stds = [np.std(cutout) for cutout in cutout_list]
+        mean, std = (np.mean(list_of_means), np.std(list_of_stds))
+
+        vmin = mean - 1 * std
+        vmax = mean + 10 * std
+    else:
+        vmin, vmax = vmax_vmin[0], vmax_vmin[1]
+    if log_scale:
+        if vmin < 0:
+            vmin = vmax / 100
+        norm = LogNorm(vmin, vmax)
+    else:
+        norm = Normalize(vmin, vmax)
+    return norm
+
+
+def create_cbar(ax_cbar, cmap, norm, cbar_label, fontsize, ticks=None, labelpad=2, tick_width=2, orientation='vertical',
+                extend='neither'):
+    """
+
+    Parameters
+    ----------
+    ax_cbar : ``matplotlib.pylab.axis``
+    cmap : str
+        same as name parameter of ``matplotlib.colors.Colormap.name``
+    norm : ``matplotlib.colors.Normalize``  or ``matplotlib.colors.LogNorm``
+    cbar_label : str
+    fontsize : int or float
+    ticks : list
+    labelpad : int or float
+    tick_width : int or float
+    orientation : str
+        default is `vertical`
+    extend : str
+        default is 'neither'
+        can be 'neither', 'min' , 'max' or 'both'
+    """
+    ColorbarBase(ax_cbar, orientation=orientation, cmap=cmap, norm=norm,   extend=extend, ticks=ticks)
+    ax_cbar.set_ylabel(cbar_label, labelpad=labelpad, fontsize=fontsize)
+    ax_cbar.tick_params(axis='both', which='both', width=tick_width, direction='in', top=True, labelbottom=False,
+                        labeltop=True, labelsize=fontsize)
+
+
+def set_lim2cutout(ax, cutout, cutout_pos, ra_length, dec_length):
+
+    lim_top_left = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra + ra_length/2*u.arcsec,
+                                                      cutout_pos.dec + dec_length/2*u.arcsec))
+    lim_bottom_right = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra - ra_length/2*u.arcsec,
+                                                          cutout_pos.dec - dec_length/2*u.arcsec))
+    ax.set_xlim(lim_top_left[0], lim_bottom_right[0])
+    ax.set_ylim(lim_bottom_right[1], lim_top_left[1])
+
+
+def plot_coord_circle(ax, position, radius, color='g', linestyle='-', linewidth=3, alpha=1., fill=False):
+    if fill:
+        facecolor = color
+    else:
+        facecolor = 'none'
+    circle = SphericalCircle(position, radius,
+                             edgecolor=color, facecolor=facecolor, linewidth=linewidth, linestyle=linestyle,
+                             alpha=alpha, transform=ax.get_transform('icrs'))
+    ax.add_patch(circle)
+
+
+def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2):
+
+    if isinstance(box_size, tuple):
+        box_size = box_size * u.arcsec
+    elif isinstance(box_size, float) | isinstance(box_size, int):
+        box_size = (box_size, box_size) * u.arcsec
+    else:
+        raise KeyError('cutout_size must be float or tuple')
+
+    top_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + box_size[0] / 2, dec=coord.dec + box_size[1] / 2))
+    top_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + box_size[0] / 2, dec=coord.dec - box_size[1] / 2))
+    bottom_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - box_size[0] / 2, dec=coord.dec + box_size[1] / 2))
+    bottom_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - box_size[0] / 2, dec=coord.dec - box_size[1] / 2))
+
+    ax.plot([top_left_pix[0], top_right_pix[0]], [top_left_pix[1], top_right_pix[1]], color=color, linewidth=linewidth)
+    ax.plot([bottom_left_pix[0], bottom_right_pix[0]], [bottom_left_pix[1], bottom_right_pix[1]], color=color,
+            linewidth=linewidth)
+    ax.plot([top_left_pix[0], bottom_left_pix[0]], [top_left_pix[1], bottom_left_pix[1]], color=color,
+            linewidth=linewidth)
+    ax.plot([top_right_pix[0], bottom_right_pix[0]], [top_right_pix[1], bottom_right_pix[1]], color=color,
+            linewidth=linewidth)
 

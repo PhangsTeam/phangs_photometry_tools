@@ -323,7 +323,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                          self.miri_targets[self.target_name]['observed_bands'])
 
         cutout_pos = SkyCoord(ra=ra_cutout, dec=dec_cutout, unit=(u.degree, u.degree), frame='fk5')
-        cutout_dict = {}
+        cutout_dict = {'cutout_pos': cutout_pos}
         for hst_band in self.hst_bands:
             if hst_band in band_list:
                 cutout_dict.update({
@@ -340,7 +340,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         for nircam_band in self.nircam_bands:
             if nircam_band in band_list:
                 cutout_dict.update({
-                    '%s_err_cutout' % nircam_band:
+                    '%s_img_cutout' % nircam_band:
                         helper_func.get_img_cutout(img=self.nircam_bands_data['%s_data_img' % nircam_band],
                                                    wcs=self.nircam_bands_data['%s_wcs_img' % nircam_band],
                                                    coord=cutout_pos, cutout_size=cutout_size)})
@@ -353,7 +353,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         for miri_band in self.miri_bands:
             if miri_band in band_list:
                 cutout_dict.update({
-                    '%s_cutout' % miri_band:
+                    '%s_img_cutout' % miri_band:
                         helper_func.get_img_cutout(img=self.miri_bands_data['%s_data_img' % miri_band],
                                                    wcs=self.miri_bands_data['%s_wcs_img' % miri_band],
                                                    coord=cutout_pos, cutout_size=cutout_size)})
