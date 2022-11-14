@@ -58,7 +58,7 @@ for filter in hst_filter_list:
 
     ee_value_uvis1 = np.array(list(uvis1_table[aperture_names][position_filter[0]][0]))
     ee_value_uvis2 = np.array(list(uvis2_table[aperture_names][position_filter[0]][0]))
-    # we ude a linear interpolation as we are only interested in the values around 50%
+    # we use a linear interpolation as we are only interested in the values around 50%
     interpolation_uvis1 = interp1d(ee_value_uvis1, aperture_values)
     interpolation_uvis2 = interp1d(ee_value_uvis2, aperture_values)
     ynew_uvis1 = np.linspace(min(ee_value_uvis1), max(ee_value_uvis1), 55)
@@ -108,10 +108,79 @@ for filter in hst_filter_list:
     ax.set_ylabel('Fractionof EE', fontsize=fontsize)
     ax.tick_params(axis='both', which='both', width=1.5, direction='in', color='k', labelsize=fontsize-3)
 
-    plt.savefig('plot_output/EE_estimation_%s.png' % filter)
+    plt.savefig('plot_output/uvis1_2_ee_estimation_%s.png' % filter)
     plt.clf()
     plt.close()
 
 
 print(uvis1_ee_dic)
 print(uvis2_ee_dic)
+
+
+# now we do the same thing for the ACS / WFC1
+# description see https://www.stsci.edu/hst/instrumentation/acs/data-analysis/aperture-corrections
+# and Bohlin 2016AJ....152...60B
+acs_wfc1_url = 'https://www.stsci.edu/files/live/sites/www/files/home/hst/instrumentation/acs/data-analysis/' \
+               'aperture-corrections/_documents/bohlin2016_wfc_ee-1.txt'
+
+file_path_acs_wfc1_url = 'data/bohlin2016_wfc_ee-1.txt'
+download_file(file_path=file_path_acs_wfc1_url, url=acs_wfc1_url)
+
+data_wfc1 = np.genfromtxt(file_path_acs_wfc1_url, skip_header=4, dtype=object)
+
+print(data_wfc1)
+
+filter_names = np.array(data_wfc1[1:, 0], dtype=str)
+aperture_sizes_pixel = np.array(data_wfc1[0, 1:], dtype=float)
+# The active image area of each WFC detector is 4096 × 2048 pixel^2. The mean plate scale is 0.05 arcseconds/pixel,
+# see https://hst-docs.stsci.edu/acsihb/chapter-7-observing-techniques/7-7-acs-apertures
+pixel_scale = 0.05
+aperture_sizes = aperture_sizes_pixel * pixel_scale
+print(filter_names)
+print(aperture_sizes)
+
+wfc1_ee_dic = {}
+
+for filter, filter_index in zip(filter_names, range(len(filter_names))):
+
+    ee_value_wfc1 = np.array(data_wfc1[filter_index + 1, 1:], dtype=float)
+    # we use a linear interpolation as we are only interested in the values around 50%
+    interpolation_wfc1 = interp1d(ee_value_wfc1, aperture_sizes)
+    ynew_wfc1 = np.linspace(min(ee_value_wfc1), max(ee_value_wfc1), 55)
+
+    ee_50_wfc1 = interpolation_wfc1(0.5)
+    ee_80_wfc1 = interpolation_wfc1(0.8)
+    wfc1_ee_dic.update({'%s' % filter: {'ee50': float(ee_50_wfc1), 'ee_80': float(ee_80_wfc1)}})
+
+    print(filter, ' UVIS1 interp_fn_p50 ', float(ee_50_wfc1), ' interp_fn_p80 ', float(ee_80_wfc1))
+
+    # visualize aperture estimation
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+    fontsize = 17
+
+    ax.plot(interpolation_wfc1(ynew_wfc1), ynew_wfc1)
+    ax.scatter(aperture_sizes, ee_value_wfc1)
+
+
+    ax.plot([0, ee_50_wfc1], [0.5, 0.5], color='k', linestyle='--')
+    ax.plot([ee_50_wfc1, ee_50_wfc1], [0.0, 0.5], color='k', linestyle='--')
+    ax.plot([0, ee_80_wfc1], [0.8, 0.8], color='k', linestyle='--')
+    ax.plot([ee_80_wfc1, ee_80_wfc1], [0.0, 0.8], color='k', linestyle='--')
+    ax.scatter(ee_50_wfc1, 0.5, color='k')
+    ax.scatter(ee_80_wfc1, 0.8, color='k')
+
+    ax.text(0.05, 0.83, filter, fontsize=fontsize)
+
+    ax.set_xlim(0, 0.5)
+    ax.set_ylim(0.1, 0.9)
+    ax.set_xlabel('APP size [arcsec]', fontsize=fontsize)
+    ax.set_ylabel('Fractionof EE', fontsize=fontsize)
+    ax.tick_params(axis='both', which='both', width=1.5, direction='in', color='k', labelsize=fontsize-3)
+
+    plt.savefig('plot_output/wfc1_ee_estimation_%s.png' % filter)
+    plt.clf()
+    plt.close()
+
+print(wfc1_ee_dic)
+

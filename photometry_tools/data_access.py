@@ -324,6 +324,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         cutout_pos = SkyCoord(ra=ra_cutout, dec=dec_cutout, unit=(u.degree, u.degree), frame='fk5')
         cutout_dict = {'cutout_pos': cutout_pos}
+        cutout_dict.update({'band_list': band_list})
         for hst_band in self.hst_bands:
             if hst_band in band_list:
                 cutout_dict.update({
