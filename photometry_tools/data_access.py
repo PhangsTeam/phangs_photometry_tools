@@ -42,6 +42,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         self.nircam_data_ver = nircam_data_ver
         self.miri_data_ver = miri_data_ver
 
+        # loaded data dictionaries
         self.hst_bands_data = {}
         self.nircam_bands_data = {}
         self.miri_bands_data = {}
@@ -162,6 +163,9 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         img_file_name = self.get_hst_img_file_name(band=band)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=img_file_name)
 
+        # for key in img_header.keys():
+        #     print(key, img_header[key])
+
         # convert the flux unit
         if 'PHOTFNU' in img_header:
             conversion_factor = img_header['PHOTFNU']
@@ -178,6 +182,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             conversion_factor = f_nu * 1e23
         else:
             raise KeyError('there is no PHOTFNU or PHOTFLAM in the header')
+
+        pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
         if flux_unit == 'Jy':
             # rescale to Jy
@@ -187,21 +193,24 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             conversion_factor *= 1e3
         elif flux_unit == 'MJy/sr':
             # get the size of one pixel in sr with the factor 1e6 for the conversion of Jy to MJy later
-            pixel_area_size = img_wcs.proj_plane_pixel_area() * self.sr_per_square_deg * 1e6
+
             # change to MJy/sr
-            conversion_factor /= pixel_area_size.value
+            conversion_factor /= (pixel_area_size_sr * 1e6)
         else:
             raise KeyError('flux_unit ', flux_unit, ' not understand!')
 
         img_data *= conversion_factor
         self.hst_bands_data.update({'%s_data_img' % band: img_data, '%s_header_img' % band: img_header,
-                                   '%s_wcs_img' % band: img_wcs})
+                                    '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
+                                    '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
             err_file_name = self.get_hst_err_file_name(band=band)
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
+            err_data = 1/np.sqrt(err_data)
             err_data *= conversion_factor
             self.hst_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
-                                       '%s_wcs_err' % band: err_wcs})
+                                        '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
+                                        '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
     def load_nircam_band(self, band, load_err=True, flux_unit='Jy'):
         """
@@ -215,16 +224,15 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # load the band observations
         file_name = self.get_nircam_img_file_name(band=band)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name, hdu_number='SCI')
+        pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
         if flux_unit == 'Jy':
             # rescale to Jy
-            pixel_area_size = img_wcs.proj_plane_pixel_area() * self.sr_per_square_deg
-            conversion_factor = pixel_area_size.value * 1e6
+            conversion_factor = pixel_area_size_sr * 1e6
 
         elif flux_unit == 'mJy':
             # rescale to Jy
-            pixel_area_size = img_wcs.proj_plane_pixel_area() * self.sr_per_square_deg
-            conversion_factor = pixel_area_size.value * 1e9
+            conversion_factor = pixel_area_size_sr * 1e9
         elif flux_unit == 'MJy/sr':
             conversion_factor = 1
         else:
@@ -232,12 +240,20 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         img_data *= conversion_factor
         self.nircam_bands_data.update({'%s_data_img' % band: img_data, '%s_header_img' % band: img_header,
-                                      '%s_wcs_img' % band: img_wcs})
+                                       '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
+                                       '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
             err_data, err_header, err_wcs = helper_func.load_img(file_name=file_name, hdu_number='ERR')
             err_data *= conversion_factor
+            # use the img_wcs for the version v0p4p2 because the WCS for the error band is not scaled.
+            # This might be corrected in later versions.
+            if self.nircam_data_ver == 'v0p4p2':
+                selected_wcs = img_wcs
+            else:
+                selected_wcs = err_wcs
             self.nircam_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
-                                          '%s_wcs_err' % band: err_wcs})
+                                           '%s_wcs_err' % band: selected_wcs, '%s_unit_err' % band: flux_unit,
+                                           '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
     def load_miri_band(self, band, load_err=True, flux_unit='Jy'):
         """
@@ -251,16 +267,15 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # load the band observations
         file_name = self.get_miri_img_file_name(band=band)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name)
+        pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
         if flux_unit == 'Jy':
             # rescale to Jy
-            pixel_area_size = img_wcs.proj_plane_pixel_area() * self.sr_per_square_deg
-            conversion_factor = pixel_area_size.value * 1e6
+            conversion_factor = pixel_area_size_sr * 1e6
 
         elif flux_unit == 'mJy':
             # rescale to Jy
-            pixel_area_size = img_wcs.proj_plane_pixel_area() * self.sr_per_square_deg
-            conversion_factor = pixel_area_size.value * 1e9
+            conversion_factor = pixel_area_size_sr * 1e9
         elif flux_unit == 'MJy/sr':
             conversion_factor = 1
         else:
@@ -268,13 +283,15 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         img_data *= conversion_factor
         self.miri_bands_data.update({'%s_data_img' % band: img_data, '%s_header_img' % band: img_header,
-                                    '%s_wcs_img' % band: img_wcs})
+                                     '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
+                                     '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
             err_file_name = self.get_miri_err_file_name(band=band)
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
             err_data *= conversion_factor
             self.miri_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
-                                        '%s_wcs_err' % band: err_wcs})
+                                         '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
+                                         '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
     def load_hst_nircam_miri_bands(self, band_list=None, flux_unit='Jy'):
         """
@@ -285,10 +302,18 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band_list : list
         flux_unit : str
         """
+        # geta list with all observed bands in order of wavelength
         if band_list is None:
-            band_list = (self.hst_targets[self.target_name]['observed_bands'] +
-                         self.nircam_targets[self.target_name]['observed_bands'] +
-                         self.miri_targets[self.target_name]['observed_bands'])
+            band_list = []
+            for band in self.hst_bands:
+                if band in self.hst_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.nircam_bands:
+                if band in self.nircam_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.miri_bands:
+                if band in self.miri_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
 
         for hst_band in self.hst_bands:
             if hst_band in band_list:
@@ -299,6 +324,115 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         for miri_band in self.miri_bands:
             if miri_band in band_list:
                 self.load_miri_band(band=miri_band, flux_unit=flux_unit)
+
+    def change_hst_nircam_miri_band_units(self, band_list=None, new_unit='MJy/sr'):
+        """
+
+        Parameters
+        ----------
+        band_list : list
+        new_unit : str
+        """
+        if band_list is None:
+            band_list = []
+            for band in self.hst_bands:
+                if band in self.hst_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.nircam_bands:
+                if band in self.nircam_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.miri_bands:
+                if band in self.miri_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+
+        for band in band_list:
+            self.change_band_unit(band=band, new_unit=new_unit)
+
+    def change_band_unit(self, band, new_unit='MJy/sr'):
+        """
+        will change loaded data to the needed unit
+        Parameters
+        ----------
+        band : str
+        new_unit : str
+        """
+        if band in self.hst_bands:
+            old_unit = self.hst_bands_data['%s_unit_img' % band]
+            conversion_factor = 1
+            # change to Jy
+            if 'm' in old_unit:
+                conversion_factor *= 1e-3
+            if 'M' in old_unit:
+                conversion_factor *= 1e6
+            if '/sr' in old_unit:
+                conversion_factor *= self.hst_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            # change to the new unit
+            if 'm' in new_unit:
+                conversion_factor *= 1e3
+            if 'M' in new_unit:
+                conversion_factor *= 1e-6
+            if '/sr' in new_unit:
+                conversion_factor /= self.hst_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            self.hst_bands_data['%s_data_img' % band] *= conversion_factor
+            self.hst_bands_data['%s_unit_img' % band] = new_unit
+            if '%s_data_err' % band in self.hst_bands_data.keys():
+                self.hst_bands_data['%s_data_err' % band] *= conversion_factor
+                self.hst_bands_data['%s_unit_err' % band] = new_unit
+
+        if band in self.nircam_bands:
+            old_unit = self.nircam_bands_data['%s_unit_img' % band]
+
+            conversion_factor = 1
+            # change to Jy
+            if 'm' in old_unit:
+                conversion_factor *= 1e-3
+            if 'M' in old_unit:
+                conversion_factor *= 1e6
+            if '/sr' in old_unit:
+                conversion_factor *= self.nircam_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            # change to the new unit
+            if 'm' in new_unit:
+                conversion_factor *= 1e3
+            if 'M' in new_unit:
+                conversion_factor *= 1e-6
+            if '/sr' in new_unit:
+                conversion_factor /= self.nircam_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            self.nircam_bands_data['%s_data_img' % band] *= conversion_factor
+            self.nircam_bands_data['%s_unit_img' % band] = new_unit
+
+            if '%s_data_err' % band in self.nircam_bands_data.keys():
+                self.nircam_bands_data['%s_data_err' % band] *= conversion_factor
+                self.nircam_bands_data['%s_unit_err' % band] = new_unit
+
+        if band in self.miri_bands:
+            old_unit = self.miri_bands_data['%s_unit_img' % band]
+
+            conversion_factor = 1
+            # change to Jy
+            if 'm' in old_unit:
+                conversion_factor *= 1e-3
+            if 'M' in old_unit:
+                conversion_factor *= 1e6
+            if '/sr' in old_unit:
+                conversion_factor *= self.miri_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            # change to the new unit
+            if 'm' in new_unit:
+                conversion_factor *= 1e3
+            if 'M' in new_unit:
+                conversion_factor *= 1e-6
+            if '/sr' in new_unit:
+                conversion_factor /= self.miri_bands_data['%s_pixel_area_size_sr_err' % band]
+
+            self.miri_bands_data['%s_data_img' % band] *= conversion_factor
+            self.miri_bands_data['%s_unit_img' % band] = new_unit
+            if '%s_data_err' % band in self.miri_bands_data.keys():
+                self.miri_bands_data['%s_data_err' % band] *= conversion_factor
+                self.miri_bands_data['%s_unit_err' % band] = new_unit
 
     def get_band_cutout_dict(self, ra_cutout, dec_cutout, cutout_size, include_err=False, band_list=None):
         """
@@ -317,10 +451,18 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         cutout_dict : dict
         each element in dictionary is of type astropy.nddata.Cutout2D object
         """
+        # geta list with all observed bands in order of wavelength
         if band_list is None:
-            band_list = (self.hst_targets[self.target_name]['observed_bands'] +
-                         self.nircam_targets[self.target_name]['observed_bands'] +
-                         self.miri_targets[self.target_name]['observed_bands'])
+            band_list = []
+            for band in self.hst_bands:
+                if band in self.hst_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.nircam_bands:
+                if band in self.nircam_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
+            for band in self.miri_bands:
+                if band in self.miri_targets[self.target_name]['observed_bands']:
+                    band_list.append(band)
 
         cutout_pos = SkyCoord(ra=ra_cutout, dec=dec_cutout, unit=(u.degree, u.degree), frame='fk5')
         cutout_dict = {'cutout_pos': cutout_pos}
@@ -367,4 +509,3 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                 coord=cutout_pos, cutout_size=cutout_size)})
 
         return cutout_dict
-

@@ -27,7 +27,9 @@ class PhangsDataStructure:
         self.hst_targets = {
             'ngc0628':
                 {'folder_name': 'ngc628mosaic',
-                 'observed_bands': ['F275W', 'F336W', 'F435W', 'F555W', 'F814W']},
+                 'observed_bands': ['F275W', 'F336W', 'F435W', 'F555W', 'F814W'],
+                 'acs_wfc1_observed_bands': ['F435W', 'F814W'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
         }
         self.nircam_targets = {
             'ngc0628':

@@ -30,6 +30,7 @@ ra_center = 24.173946 - 33.5 / 3600
 dec_center = 15.783662 - 27.5 / 3600
 # size of image
 size_of_cutout = (4, 4)
+axis_length = (size_of_cutout[0] - 0.1, size_of_cutout[1] - 0.1)
 cutout_dict = phangs_photometry.get_band_cutout_dict(ra_cutout=ra_center, dec_cutout=dec_center,
                                                      cutout_size=size_of_cutout)
 
@@ -39,7 +40,6 @@ circ_pos_2 = SkyCoord(ra=ra_center + 0.41 / 3600, dec=dec_center + 0.03 / 3600, 
 circ_pos_3 = SkyCoord(ra=ra_center + 0.2 / 3600, dec=dec_center + 0.96 / 3600, unit=(u.degree, u.degree), frame='fk5')
 
 
-axis_length = (size_of_cutout[0] - 0.1, size_of_cutout[1] - 0.1)
 fig = PlotPhotometry.plot_cutout_panel_hst_nircam_miri(
     hst_band_list=phangs_photometry.hst_targets[phangs_photometry.target_name]['observed_bands'],
     nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
