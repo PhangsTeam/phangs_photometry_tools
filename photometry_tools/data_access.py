@@ -58,9 +58,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         -------
         data_file_path : Path
         """
-        if band not in self.hst_bands:
-            raise AttributeError('The band <%s> is not in the list of possible HST bands it must be one of ' % band,
-                                 [band for band in self.hst_bands])
+        if (band not in self.hst_acs_wfc1_bands) & (band not in self.hst_wfc3_uvis2_bands):
+            raise AttributeError('The band <%s> is not in the list of possible HST bands.' % band)
 
         hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
                            self.hst_targets[self.target_name]['folder_name'])
@@ -79,9 +78,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         -------
         data_file_path : Path
         """
-        if band not in self.hst_bands:
-            raise AttributeError('The band <%s> is not in the list of possible HST bands it must be one of ' % band,
-                                 [band for band in self.hst_bands])
+        if (band not in self.hst_acs_wfc1_bands) & (band not in self.hst_wfc3_uvis2_bands):
+            raise AttributeError('The band <%s> is not in the list of possible HST bands.' % band)
 
         hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
                            self.hst_targets[self.target_name]['folder_name'])
@@ -101,8 +99,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         data_file_path : Path
         """
         if band not in self.nircam_bands:
-            raise AttributeError('The band <%s> is not in the list of possible NIRCAM bands it must be one of ' % band,
-                                 [band for band in self.hst_bands])
+            raise AttributeError('The band <%s> is not in the list of possible NIRCAM bands.' % band)
 
         nircam_data_folder = (self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver] /
                               self.nircam_targets[self.target_name]['folder_name'])
@@ -122,8 +119,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         data_file_path : Path
         """
         if band not in self.miri_bands:
-            raise AttributeError('The band <%s> is not in the list of possible MIRI bands it must be one of ' % band,
-                                 [band for band in self.hst_bands])
+            raise AttributeError('The band <%s> is not in the list of possible MIRI bands.' % band)
 
         miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
         ending_of_band_file = '%s_miri_%s_anchored.fits' % (self.target_name, band.lower())
@@ -142,8 +138,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         data_file_path : Path
         """
         if band not in self.miri_bands:
-            raise AttributeError('The band <%s> is not in the list of possible MIRI bands it must be one of ' % band,
-                                 [band for band in self.hst_bands])
+            raise AttributeError('The band <%s> is not in the list of possible MIRI bands.' % band)
 
         miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
         ending_of_band_file = '%s_miri_%s_noisemap.fits' % (self.target_name, band.lower())
@@ -238,6 +233,10 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         else:
             raise KeyError('flux_unit ', flux_unit, ' not understand')
 
+        # add flux zero-point correction
+        if self.nircam_data_ver == 'v0p4p2':
+            conversion_factor *= self.nircam_zero_point_flux_corr[band]
+
         img_data *= conversion_factor
         self.nircam_bands_data.update({'%s_data_img' % band: img_data, '%s_header_img' % band: img_header,
                                        '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
@@ -305,8 +304,9 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # geta list with all observed bands in order of wavelength
         if band_list is None:
             band_list = []
-            for band in self.hst_bands:
-                if band in self.hst_targets[self.target_name]['observed_bands']:
+            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+                if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
+                            self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
             for band in self.nircam_bands:
                 if band in self.nircam_targets[self.target_name]['observed_bands']:
@@ -315,15 +315,28 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                 if band in self.miri_targets[self.target_name]['observed_bands']:
                     band_list.append(band)
 
-        for hst_band in self.hst_bands:
-            if hst_band in band_list:
-                self.load_hst_band(band=hst_band, flux_unit=flux_unit)
-        for nircam_band in self.nircam_bands:
-            if nircam_band in band_list:
-                self.load_nircam_band(band=nircam_band, flux_unit=flux_unit)
-        for miri_band in self.miri_bands:
-            if miri_band in band_list:
-                self.load_miri_band(band=miri_band, flux_unit=flux_unit)
+        # sort band list with increasing wavelength
+        band_list = self.sort_band_list(band_list=band_list)
+        for band in band_list:
+            if band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+                self.load_hst_band(band=band, flux_unit=flux_unit)
+            elif band in self.nircam_bands:
+                self.load_nircam_band(band=band, flux_unit=flux_unit)
+            elif band in self.miri_bands:
+                self.load_miri_band(band=band, flux_unit=flux_unit)
+            else:
+                raise KeyError('Band is not found in possible band lists')
+
+
+        # for hst_band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+        #     if hst_band in band_list:
+        #         self.load_hst_band(band=hst_band, flux_unit=flux_unit)
+        # for nircam_band in self.nircam_bands:
+        #     if nircam_band in band_list:
+        #         self.load_nircam_band(band=nircam_band, flux_unit=flux_unit)
+        # for miri_band in self.miri_bands:
+        #     if miri_band in band_list:
+        #         self.load_miri_band(band=miri_band, flux_unit=flux_unit)
 
     def change_hst_nircam_miri_band_units(self, band_list=None, new_unit='MJy/sr'):
         """
@@ -335,8 +348,9 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         if band_list is None:
             band_list = []
-            for band in self.hst_bands:
-                if band in self.hst_targets[self.target_name]['observed_bands']:
+            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+                if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
+                            self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
             for band in self.nircam_bands:
                 if band in self.nircam_targets[self.target_name]['observed_bands']:
@@ -356,7 +370,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band : str
         new_unit : str
         """
-        if band in self.hst_bands:
+        if band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
             old_unit = self.hst_bands_data['%s_unit_img' % band]
             conversion_factor = 1
             # change to Jy
@@ -454,8 +468,9 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # geta list with all observed bands in order of wavelength
         if band_list is None:
             band_list = []
-            for band in self.hst_bands:
-                if band in self.hst_targets[self.target_name]['observed_bands']:
+            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+                if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
+                            self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
             for band in self.nircam_bands:
                 if band in self.nircam_targets[self.target_name]['observed_bands']:
@@ -463,11 +478,13 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             for band in self.miri_bands:
                 if band in self.miri_targets[self.target_name]['observed_bands']:
                     band_list.append(band)
+            # sort bands in increasing order
+            band_list = self.sort_band_list(band_list=band_list)
 
         cutout_pos = SkyCoord(ra=ra_cutout, dec=dec_cutout, unit=(u.degree, u.degree), frame='fk5')
         cutout_dict = {'cutout_pos': cutout_pos}
         cutout_dict.update({'band_list': band_list})
-        for hst_band in self.hst_bands:
+        for hst_band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
             if hst_band in band_list:
                 cutout_dict.update({
                     '%s_img_cutout' % hst_band:
@@ -509,3 +526,59 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                 coord=cutout_pos, cutout_size=cutout_size)})
 
         return cutout_dict
+
+    def get_band_wave(self, band, unit='mu'):
+        """
+        Returns mean wavelength of a specific band
+        Parameters
+        ----------
+        unit : str
+        band : str
+
+        Returns
+        -------
+        wavelength : float
+        """
+        if band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
+            wave = self.hst_acs_wfc1_bands_mean_wave[band]
+        elif band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
+            wave = self.hst_wfc3_uvis1_bands_mean_wave[band]
+        elif band in self.nircam_targets[self.target_name]['observed_bands']:
+            wave = self.nircam_bands_mean_wave[band]
+        elif band in self.miri_targets[self.target_name]['observed_bands']:
+            wave = self.miri_bands_mean_wave[band]
+        else:
+            raise KeyError(band, 'not understand')
+
+        if unit == 'angstrom':
+            return wave
+        if unit == 'nano':
+            return wave * 1e-1
+        elif unit == 'mu':
+            return wave * 1e-4
+        else:
+            raise KeyError('return unit not understand')
+
+    def sort_band_list(self, band_list):
+        """
+        sorts a band list with increasing wavelength
+        Parameters
+        ----------
+        band_list : list
+
+        Returns
+        -------
+        sorted_band_list : list
+        """
+        wave_list = []
+        for band in band_list:
+            wave_list.append(self.get_band_wave(band=band))
+
+        # print(len(band_list))
+        # print(len(wave_list))
+
+        # sort wavelength bands
+        sort = np.argsort(wave_list)
+        # print(sort)
+        return list(np.array(band_list)[sort])
+

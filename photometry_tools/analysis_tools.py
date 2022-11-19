@@ -67,12 +67,12 @@ class AnalysisTools(data_access.DataAccess):
                 'aperture_dict_%s' % band: self.flux_from_circ_aperture(
                     data=cutout_dict['%s_img_cutout' % band].data, data_err=cutout_dict['%s_err_cutout' % band].data,
                     wcs=cutout_dict['%s_img_cutout' % band].wcs, pos=pos,
-                    aperture_rad=aperture_rad_dict['aperture_%s' % band], recenter=recenter,
+                    aperture_rad=aperture_rad_dict['aperture_%s' % band], band=band, recenter=recenter,
                     recenter_rad=recenter_rad)})
 
         return aperture_dict
 
-    def flux_from_circ_aperture(self, data, data_err, wcs, pos, aperture_rad, recenter=False, recenter_rad=0.2):
+    def flux_from_circ_aperture(self, data, data_err, wcs, pos, aperture_rad, band, recenter=False, recenter_rad=0.2):
         """
 
         Parameters
@@ -82,6 +82,7 @@ class AnalysisTools(data_access.DataAccess):
         wcs : ``astropy.wcs.WCS``
         pos : ``astropy.coordinates.SkyCoord``
         aperture_rad : float
+        band : str
         recenter : bool
         recenter_rad : float
 
@@ -99,6 +100,7 @@ class AnalysisTools(data_access.DataAccess):
                                                                   aperture_rad=aperture_rad, data_err=data_err)
             aperture_band_dict.update({'flux': flux})
             aperture_band_dict.update({'flux_err': flux_err})
+            aperture_band_dict.update({'wave': self.get_band_wave(band)})
 
         else:
             aperture_band_dict = {'new_pos': None}
@@ -107,6 +109,7 @@ class AnalysisTools(data_access.DataAccess):
                                                                   aperture_rad=aperture_rad, data_err=data_err)
             aperture_band_dict.update({'flux': flux})
             aperture_band_dict.update({'flux_err': flux_err})
+            aperture_band_dict.update({'wave': self.get_band_wave(band)})
 
         return aperture_band_dict
 
@@ -221,7 +224,8 @@ class AnalysisTools(data_access.DataAccess):
         else:
             data_err = np.array(data_err.byteswap().newbyteorder(), dtype=float)
 
-        flux, flux_err, flag = sep.sum_circle(data=data - bkg, x=pixel_coords[0], y=pixel_coords[1],
-                                              r=float(pix_radius[0]), err=data_err)
+        flux, flux_err, flag = sep.sum_circle(data=data - bkg.globalback, x=np.array([float(pixel_coords[0])]),
+                                              y=np.array([float(pixel_coords[1])]), r=np.array([float(pix_radius)]),
+                                              err=data_err)
 
         return float(flux), float(flux_err)

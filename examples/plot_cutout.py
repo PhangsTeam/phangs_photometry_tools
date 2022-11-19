@@ -40,8 +40,14 @@ circ_pos_2 = SkyCoord(ra=ra_center + 0.41 / 3600, dec=dec_center + 0.03 / 3600, 
 circ_pos_3 = SkyCoord(ra=ra_center + 0.2 / 3600, dec=dec_center + 0.96 / 3600, unit=(u.degree, u.degree), frame='fk5')
 
 
+# sort bands
+hst_bands = phangs_photometry.sort_band_list(
+    band_list=(phangs_photometry.hst_targets[phangs_photometry.target_name]['acs_wfc1_observed_bands'] +
+               phangs_photometry.hst_targets[phangs_photometry.target_name]['wfc3_uvis_observed_bands']))
+
+
 fig = PlotPhotometry.plot_cutout_panel_hst_nircam_miri(
-    hst_band_list=phangs_photometry.hst_targets[phangs_photometry.target_name]['observed_bands'],
+    hst_band_list=hst_bands,
     nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
     miri_band_list=phangs_photometry.miri_targets[phangs_photometry.target_name]['observed_bands'],
     cutout_dict=cutout_dict,

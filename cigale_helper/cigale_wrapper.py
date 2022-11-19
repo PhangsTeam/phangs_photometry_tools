@@ -1,0 +1,367 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import astropy.units as u
+from astropy.io import fits
+import astropy.constants as const
+from astropy.table import Table
+
+
+class CigaleModelWrapper:
+    def __init__(self):
+        # initial params
+        self.cigale_init_params = {
+            'data_file': '',
+            'parameters_file': '',
+            'sed_modules': ['ssp', 'bc03_ssp', 'nebular', 'dustextPHANGS', 'dl2014', 'redshifting'],
+            'analysis_method': 'savefluxes',
+            'cores': 1,
+        }
+        self.sed_modules_params = {
+            'ssp':
+                {
+                    # Index of the SSP to use.
+                    'index': [0]
+                },
+            'bc03_ssp':
+                {
+                    # Initial mass function: 0 (Salpeter) or 1 (Chabrier).
+                    'imf': [0],
+                    # Metalicity. Possible values are: 0.0001, 0.0004, 0.004, 0.008, 0.02, 0.05.
+                    'metallicity': [0.02],
+                    # Age [Myr] of the separation between the young and the old star
+                    # populations. The default value in 10^7 years (10 Myr). Set to 0 not to
+                    # differentiate ages (only an old population).
+                    'separation_age': [10]
+                },
+            'nebular':
+                {
+                    # Ionisation parameter. Possible values are: -4.0, -3.9, -3.8, -3.7,
+                    # -3.6, -3.5, -3.4, -3.3, -3.2, -3.1, -3.0, -2.9, -2.8, -2.7, -2.6,
+                    # -2.5, -2.4, -2.3, -2.2, -2.1, -2.0, -1.9, -1.8, -1.7, -1.6, -1.5,
+                    # -1.4, -1.3, -1.2, -1.1, -1.0.
+                    'logU': [-2.0],
+                    # Gas metallicity. Possible values are: 0.000, 0.0004, 0.001, 0.002,
+                    # 0.0025, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.011, 0.012,
+                    # 0.014, 0.016, 0.019, 0.020, 0.022, 0.025, 0.03, 0.033, 0.037, 0.041,
+                    # 0.046, 0.051.
+                    'zgas': [0.02],
+                    # Electron density. Possible values are: 10, 100, 1000.
+                    'ne': [100],
+                    # Fraction of Lyman continuum photons escaping the galaxy. Possible
+                    # values between 0 and 1.
+                    'f_esc': [0.0],
+                    # Fraction of Lyman continuum photons absorbed by dust. Possible values
+                    # between 0 and 1.
+                    'f_dust': [0.0],
+                    # Line width in km/s.
+                    'lines_width': [100.0],
+                    # Include nebular emission.
+                    'emission': True},
+            'dustextPHANGS':
+                {
+                    # Attenuation at 550 nm.
+                    'A550': [0.3],
+                    'filters': 'B_B90 & V_B90 & FUV'
+                },
+            'dl2014':
+                {
+                    # Mass fraction of PAH. Possible values are: 0.47, 1.12, 1.77, 2.50,
+                    # 3.19, 3.90, 4.58, 5.26, 5.95, 6.63, 7.32.
+                    'qpah': [2.5],
+                    # Minimum radiation field. Possible values are: 0.100, 0.120, 0.150,
+                    # 0.170, 0.200, 0.250, 0.300, 0.350, 0.400, 0.500, 0.600, 0.700, 0.800,
+                    # 1.000, 1.200, 1.500, 1.700, 2.000, 2.500, 3.000, 3.500, 4.000, 5.000,
+                    # 6.000, 7.000, 8.000, 10.00, 12.00, 15.00, 17.00, 20.00, 25.00, 30.00,
+                    # 35.00, 40.00, 50.00.
+                    'umin': [1.0],
+                    # Powerlaw slope dU/dM propto U^alpha. Possible values are: 1.0, 1.1,
+                    # 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5,
+                    # 2.6, 2.7, 2.8, 2.9, 3.0.
+                    'alpha': [2.0],
+                    # Fraction illuminated from Umin to Umax. Possible values between 0 and
+                    # 1.
+                    'gamma': [0.1],
+                    # Take self-absorption into account.
+                    'self_abs': False,
+                },
+            'redshifting':
+                {
+                    # Redshift of the objects. Leave empty to use the redshifts from the
+                    # input file.
+                    'redshift': [0.0]
+                }
+        }
+        self.analysis_params = {
+            # List of the physical properties to save. Leave empty to save all the
+            # physical properties (not recommended when there are many models).
+            'variables': '',
+            # If True, save the generated spectrum for each model.
+            'save_sed': True,
+            # Number of blocks to compute the models. Having a number of blocks
+            # larger than 1 can be useful when computing a very large number of
+            # models or to split the result file into smaller files.
+            'blocks': 1
+        }
+
+        # cigale filter names
+        self.cigale_filter_names = {
+            'F275W': 'F275W_UVIS_CHIP2',
+            'F275W_err': 'F275W_UVIS_CHIP2_err',
+            'F336W': 'F336W_UVIS_CHIP2',
+            'F336W_err': 'F336W_UVIS_CHIP2_err',
+            'F438W': 'F438W_UVIS_CHIP2',
+            'F438W_err': 'F438W_UVIS_CHIP2_err',
+            'F555W': 'F555W_UVIS_CHIP2',
+            'F555W_err': 'F555W_UVIS_CHIP2_err',
+            'F814W': 'F814W_UVIS_CHIP2',
+            'F814W_err': 'F814W_UVIS_CHIP2_err',
+            'F200W': 'jwst.nircam.F200W',
+            'F200W_err': 'jwst.nircam.F200W_err',
+            'F300M': 'jwst.nircam.F300M',
+            'F300M_err': 'jwst.nircam.F300M_err',
+            'F335M': 'jwst.nircam.F335M',
+            'F335M_err': 'jwst.nircam.F335M_err',
+            'F360M': 'jwst.nircam.F360M',
+            'F360M_err': 'jwst.nircam.F360M_err',
+            'F770W': 'jwst.miri.F770W',
+            'F770W_err': 'jwst.miri.F770W_err',
+            'F1000W': 'jwst.miri.F1000W',
+            'F1000W_err': 'jwst.miri.F1000W_err',
+            'F1130W': 'jwst.miri.F1130W',
+            'F1130W_err': 'jwst.miri.F1130W_err',
+            'F2100W': 'jwst.miri.F2100W',
+            'F2100W_er': 'jwst.miri.F2100W_err'
+        }
+
+        # filter pivot wavelengths (in wavlength order)
+        filter_lam_angstrom = np.array([19886.48,29891.21,33620.67,36241.76,76393.24,99531.16,113085.01,207950.06])*u.AA
+        self.filter_lam_nm = filter_lam_angstrom.to(u.nm).value
+
+        # filter FWHM (but divide by 2, so we can plot the span centered on the pivot wavelengths)
+        filter_fwhm_angstrom = np.array([4689.40,3276.84,3576.00,3855.31,21048.58,18731.30,7128.97,46818.15]) / 2*u.AA
+        self.filter_fwhm_nm = filter_fwhm_angstrom.to(u.nm).value
+
+        self.filter_colors = np.array(['#bb44bb', '#6244bb', '#335ccc', '#3ec1c1', '#84ff00', '#e8f00f', '#de9221', '#f20d0d'])
+        self.filter_labels = np.array(['F200W', 'F300M', 'F335M', 'F360M', 'F770W', 'F1000W', 'F1130W', 'F2100W'])
+
+        # hst filters
+        self.hst_lam_nm = np.array([270.720, 335.485, 432.555, 530.59, 656.661, 804.810])
+        self.hst_fwhm = np.array([39.8, 51.2, 61.8, 156.2, 125.54, 153.6]) / 2
+
+        # cigale model table
+        self.model_table = None
+        self.model_table_dict = None
+
+    @staticmethod
+    def replace_params_in_file(param_dict, file_name='pcigale.ini'):
+        with open(file_name, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+        for key in param_dict.keys():
+            line_index = [i for i in range(len(lines)) if lines[i].startswith(key)]
+            prefix = ''
+            if not line_index:
+                line_index = [i for i in range(len(lines)) if lines[i].startswith('  ' + key)]
+                prefix = '  '
+            if not line_index:
+                line_index = [i for i in range(len(lines)) if lines[i].startswith('    ' + key)]
+                prefix = '    '
+            if len(line_index) > 1:
+                raise KeyError('There is apparently more than one than one time a line beginning with <<', key, '>>')
+            if isinstance(param_dict[key], (str, bool, int, float)):
+                new_line = prefix + key + ' = ' + str(param_dict[key]) + '\n'
+            elif isinstance(param_dict[key], list):
+                new_line = prefix + key + ' = '
+                for obj in param_dict[key]:
+                    new_line += str(obj) + ', '
+            else:
+                raise KeyError('The given parameters mus be of type str, bool, int, float or a list of these types')
+            lines[line_index[0]] = new_line
+        with open(file_name, 'w', encoding='utf-8') as file:
+            file.writelines(lines)
+
+    def create_cigale_model(self, delete_old_models=True):
+        # initiate pcigale
+        os.system('pcigale init')
+        # set initial parameters
+        self.replace_params_in_file(param_dict=self.cigale_init_params, file_name='pcigale.ini')
+        # configurate pcigale
+        os.system('pcigale genconf')
+        # set module configurations
+        for module_str in self.sed_modules_params.keys():
+            self.replace_params_in_file(param_dict=self.sed_modules_params[module_str], file_name='pcigale.ini')
+        # change analysis parameters
+        self.replace_params_in_file(param_dict=self.analysis_params, file_name='pcigale.ini')
+        # run pcigale
+        os.system('pcigale run')
+        # delete old models
+        if delete_old_models:
+            os.system('rm -rf *_out')
+
+    def plot_hst_nircam_miri_filters(self, ax, fontsize=15, alpha=0.3):
+        for i in range(len(self.filter_colors)):
+            ax.axvspan(self.filter_lam_nm[i]-self.filter_fwhm_nm[i], self.filter_lam_nm[i]+self.filter_fwhm_nm[i],
+                       alpha=alpha, color=self.filter_colors[i], zorder=0)
+
+            if (i == 3) or (i == 6):
+                ax.text(self.filter_lam_nm[i], 2e-7, self.filter_labels[i], fontsize=fontsize, rotation=90)
+            else:
+                ax.text(self.filter_lam_nm[i], 2e-7, self.filter_labels[i], fontsize=fontsize, rotation=90, ha='center')
+
+        for i in range(len(self.hst_lam_nm)):
+            ax.axvspan(self.hst_lam_nm[i] - self.hst_fwhm[i], self.hst_lam_nm[i] + self.hst_fwhm[i], alpha=alpha,
+                       color='#636363')
+
+    @staticmethod
+    def plot_cigale_model(ax, model_file_name, cluster_mass, distance_Mpc, label=''):
+        # read in the invidual model/sed
+        mod = fits.open(model_file_name)[1].data
+        # get wavelengths in nanometer
+        lam_nm = mod['wavelength'] * u.nm
+        # covert to micron if necessary later
+        lam_um = lam_nm.to(u.um)
+        # frequencies of the wavelengths
+        freq = (const.c.to(u.nm/u.s) / lam_nm).to(u.Hz)
+
+        # get Fnu in mJy units
+        mod_Fnu_mJy = mod['Fnu'] * u.mJy
+        # get Luminosity in W / nm / Msun units
+        L_WnmMsun = mod['L_lambda_total'] * u.W / u.nm / u.Msun
+
+        # convert Luminosity to W/Msun
+        L_WMsun = L_WnmMsun * lam_nm
+
+        # scale the Luminosity to the chosen star cluster mass
+        L_W = L_WMsun * cluster_mass
+
+        # convert distance from Mpc to meters
+        distance_m = distance_Mpc.to(u.m)
+
+        # convert luminsoity to Flux [W/m2]
+        F_Wm2 = L_W / (4*np.pi*distance_m**2)
+
+        # Convert that Flux to Flux density in Jy
+        Fnu_Jy = (F_Wm2/freq).to(u.Jy)
+        # convert to mJy
+        Fnu_mJy = Fnu_Jy.to(u.mJy)
+
+        # # convert to AB mag
+        # Fnu_AB = Fnu_mJy.to(u.AB)
+
+        # plot
+        ax.plot(lam_nm, Fnu_mJy, linestyle='-', linewidth=1.5, label=label)
+
+    def load_cigale_model_block(self, model_block_file_name='out/models-block-0.fits'):
+        self.model_table = Table.read(model_block_file_name)
+
+        # create dictionary
+        model_table_dict = {}
+        # id
+        model_table_dict.update({'id': {'value': self.model_table['id'], 'label': r'ID'} })
+        # stellar parameters
+        model_table_dict.update({'ssp.index': {'value': self.model_table['ssp.index'], 'label': r'Index$_{*}$'} })
+        model_table_dict.update({'stellar.age': {'value': self.model_table['stellar.age'], 'label': r'Age$_{*}$'} })
+        model_table_dict.update({'stellar.metallicity': {'value': self.model_table['stellar.metallicity'], 'label': r'Metal$_{*}$'} })
+        # dust parameters
+        model_table_dict.update({'attenuation.A550': {'value': self.model_table['attenuation.A550'], 'label': r'A$_{\rm 550}$'} })
+
+        model_table_dict.update({'dl2014.alpha': {'value': self.model_table['dust.alpha'], 'label': r'$\alpha_{\rm Dust}$'} })
+        model_table_dict.update({'dl2014.gamma': {'value': self.model_table['dust.gamma'], 'label': r'$\gamma_{\rm Dust}$'} })
+        model_table_dict.update({'dl2014.qpah': {'value': self.model_table['dust.qpah'], 'label': r'Q-PAH$_{\rm Dust}$'} })
+        model_table_dict.update({'dl2014.umean': {'value': self.model_table['dust.umean'], 'label': r'U-mean$_{\rm Dust}$'} })
+        model_table_dict.update({'dl2014.umin': {'value': self.model_table['dust.umin'], 'label': r'U-min$_{\rm Dust}$'} })
+        # nebular parameters
+        model_table_dict.update({'nebular.f_dust': {'value': self.model_table['nebular.f_dust'], 'label': r'f$_{\rm Dust}$'} })
+        model_table_dict.update({'nebular.f_esc': {'value': self.model_table['nebular.f_esc'], 'label': r'f${\rm esc}$'} })
+        model_table_dict.update({'nebular.lines_width': {'value': self.model_table['nebular.lines_width'], 'label': r'FWHM$_{\rm Gas}$'} })
+        model_table_dict.update({'nebular.logU': {'value': self.model_table['nebular.logU'], 'label': r'logU$_{\rm Gas}$'} })
+        model_table_dict.update({'nebular.ne': {'value': self.model_table['nebular.ne'], 'label': r'ne$_{\rm Gas}$'} })
+        model_table_dict.update({'nebular.zgas': {'value': self.model_table['nebular.zgas'], 'label': r'Metal$_{\rm Gas}$'} })
+
+        self.model_table_dict = model_table_dict
+
+    def create_label_str_list(self, parameter_list, list_digits=None):
+        if list_digits is None:
+            list_digits = [2] * len(parameter_list)
+        label_list = []
+        for index in range(len(self.model_table['id'])):
+            label_string = ''
+            for param_index, parameter in zip(range(len(parameter_list)), parameter_list):
+                label_string = (label_string + self.model_table_dict[parameter]['label'] + '=' +
+                                '{:.{n}f}'.format(self.model_table_dict[parameter]['value'][index],
+                                                  n=list_digits[param_index]) + ' ')
+            label_list.append(label_string)
+        return label_list
+
+    def create_cigale_data_file(self):
+        new_flux_list = np.array([flux_dict['flux_f275w'], flux_dict['flux_f336w'], flux_dict['flux_f438w'],
+                              flux_dict['flux_f555w'], flux_dict['flux_f814w'],
+                              flux_dict['flux_f200w'], flux_dict['flux_f300m'], flux_dict['flux_f335m'],
+                              flux_dict['flux_f360m'],
+                              flux_dict['flux_f770w'], flux_dict['flux_f1000w'], flux_dict['flux_f1130w'],
+                              flux_dict['flux_f2100w']])
+
+
+        new_flux_err_list = np.array([flux_dict['flux_err_f275w'], flux_dict['flux_err_f336w'], flux_dict['flux_err_f438w'],
+                                      flux_dict['flux_err_f555w'], flux_dict['flux_err_f814w'],
+                                      flux_dict['flux_err_f200w'], flux_dict['flux_err_f300m'], flux_dict['flux_err_f335m'],
+                                      flux_dict['flux_err_f360m'],
+                                      flux_dict['flux_err_f770w'], flux_dict['flux_err_f1000w'], flux_dict['flux_err_f1130w'],
+                                      flux_dict['flux_err_f2100w']])
+
+        upper_limit = (new_flux_list / new_flux_err_list < 5) | (new_flux_list < 0)
+        print('upper_limit ', upper_limit)
+        cluster_dict.update({'flux_%i' % list_index: new_flux_list,
+                             'flux_err_%i' % list_index: new_flux_err_list,
+                             'upper_limit_%i' % list_index: upper_limit})
+
+        #
+        # plt.scatter(np.array(wave_list), np.array(flux_list[:, list_index]))
+        # plt.scatter(np.array(wave_list), np.array(new_flux_list))
+        # plt.xscale('log')
+        # plt.yscale('log')
+        # plt.show()
+
+
+
+
+
+    band_string = 'bands = '
+    for index in range(len(band_names)):
+        band_string += band_names[index]
+        if index < (len(band_names) -1):
+            band_string += ', '
+    print(band_string)
+
+    flux_file = open("flux_file.dat", "w")
+
+    flux_file.writelines("# id             redshift  distance   ")
+    for index in range(len(band_names)):
+        flux_file.writelines(band_names[index] + "   ")
+    flux_file.writelines(" \n")
+
+
+    # for cluster_index in range(flux_list.shape[2]):
+    #     flux_file.writelines(" %i   0.0   " % cluster_index)
+    #     for band_index in range(flux_list.shape[0]):
+    #         flux_file.writelines("%.15f   " % flux_list[band_index, cluster_index])
+    #         flux_file.writelines("%.15f   " % err_list[band_index, cluster_index])
+    #     flux_file.writelines(" \n")
+
+
+    for cluster_index in [2]:
+        flux_file.writelines(" %i   0.0   18.0  " % cluster_index)
+        for band_index in range(len(new_flux_list)):
+            if cluster_dict['upper_limit_%i' % cluster_index][band_index]:
+                flux_file.writelines("%.15f   " % (np.max([cluster_dict['flux_err_%i' % cluster_index][band_index], 0]) +
+                                                   cluster_dict['flux_err_%i' % cluster_index][band_index]))
+                flux_file.writelines("%.15f   " % (-cluster_dict['flux_err_%i' % cluster_index][band_index]))
+            else:
+                flux_file.writelines("%.15f   " % (cluster_dict['flux_%i' % cluster_index][band_index]))
+                flux_file.writelines("%.15f   " % (cluster_dict['flux_err_%i' % cluster_index][band_index]))
+        flux_file.writelines(" \n")
+
+    flux_file.close()
+
+
+
