@@ -229,3 +229,5 @@ class AnalysisTools(data_access.DataAccess):
                                               err=data_err)
 
         return float(flux), float(flux_err)
+
+

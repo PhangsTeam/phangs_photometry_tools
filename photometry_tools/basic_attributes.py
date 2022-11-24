@@ -10,11 +10,11 @@ class PhangsDataStructure:
     def __init__(self):
         super().__init__()
 
-        self.target_list = ['ngc0628']
+        self.target_list = ['ngc0628', 'ngc7496']
 
-        self.target_observed_hst = ['ngc0628']
-        self.target_observed_nircam = ['ngc0628']
-        self.target_observed_miri = ['ngc0628']
+        self.target_observed_hst = ['ngc0628', 'ngc7496']
+        self.target_observed_nircam = ['ngc0628', 'ngc7496']
+        self.target_observed_miri = ['ngc0628', 'ngc7496']
 
         self.hst_ver_folder_names = {'v1': 'v1.0', 'v0.9': 'v0.9'}
         self.nircam_ver_folder_names = {'v0p4p2': 'v0p4p2'}
@@ -25,14 +25,23 @@ class PhangsDataStructure:
                 {'folder_name': 'ngc628mosaic',
                  'acs_wfc1_observed_bands': ['F435W', 'F814W'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
+            'ngc7496':
+                {'folder_name': 'ngc7496',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
         }
         self.nircam_targets = {
             'ngc0628':
                 {'folder_name': 'ngc0628',
                  'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc7496':
+                {'folder_name': 'ngc7496',
+                 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
         }
         self.miri_targets = {
             'ngc0628':
+                {'observed_bands': ['F770W', 'F1000W', 'F1130W', 'F2100W']},
+            'ngc7496':
                 {'observed_bands': ['F770W', 'F1000W', 'F1130W', 'F2100W']},
         }
 
@@ -45,10 +54,11 @@ class PhysParams:
         super().__init__()
 
         """
-        distances need to be done!!!!!
+        distances need to be done!!!!! See Lee et al 2022 Table 1
         """
         self.dist_dict = {
-            'ngc0628': {'dist': 11, 'dist_err': 1, 'method': 'TRGB'}
+            'ngc0628': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
+            'ngc7496': {'dist': 18.72, 'dist_err': 2.81, 'method': 'NAM'}
         }
         self.sr_per_square_deg = 0.00030461741978671  # steradians per square degree
 
@@ -386,5 +396,103 @@ class PhysParams:
             'F1800W': {'ee50': 3.311, 'ee80': 10.001},
             'F2100W': {'ee50': 3.783, 'ee80': 11.497},
             'F2550W': {'ee50': 4.591, 'ee80': 13.919},
+        }
+
+
+class CigaleModelWrapper:
+    def __init__(self):
+        # initial params
+        self.cigale_init_params = {
+            'data_file': '',
+            'parameters_file': '',
+            'sed_modules': ['ssp', 'bc03_ssp', 'nebular', 'dustextPHANGS', 'dl2014', 'redshifting'],
+            'analysis_method': 'savefluxes',
+            'cores': 1,
+        }
+        self.sed_modules_params = {
+            'ssp':
+                {
+                    # Index of the SSP to use.
+                    'index': [0]
+                },
+            'bc03_ssp':
+                {
+                    # Initial mass function: 0 (Salpeter) or 1 (Chabrier).
+                    'imf': [0],
+                    # Metalicity. Possible values are: 0.0001, 0.0004, 0.004, 0.008, 0.02, 0.05.
+                    'metallicity': [0.02],
+                    # Age [Myr] of the separation between the young and the old star
+                    # populations. The default value in 10^7 years (10 Myr). Set to 0 not to
+                    # differentiate ages (only an old population).
+                    'separation_age': [10]
+                },
+            'nebular':
+                {
+                    # Ionisation parameter. Possible values are: -4.0, -3.9, -3.8, -3.7,
+                    # -3.6, -3.5, -3.4, -3.3, -3.2, -3.1, -3.0, -2.9, -2.8, -2.7, -2.6,
+                    # -2.5, -2.4, -2.3, -2.2, -2.1, -2.0, -1.9, -1.8, -1.7, -1.6, -1.5,
+                    # -1.4, -1.3, -1.2, -1.1, -1.0.
+                    'logU': [-2.0],
+                    # Gas metallicity. Possible values are: 0.000, 0.0004, 0.001, 0.002,
+                    # 0.0025, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.011, 0.012,
+                    # 0.014, 0.016, 0.019, 0.020, 0.022, 0.025, 0.03, 0.033, 0.037, 0.041,
+                    # 0.046, 0.051.
+                    'zgas': [0.02],
+                    # Electron density. Possible values are: 10, 100, 1000.
+                    'ne': [100],
+                    # Fraction of Lyman continuum photons escaping the galaxy. Possible
+                    # values between 0 and 1.
+                    'f_esc': [0.0],
+                    # Fraction of Lyman continuum photons absorbed by dust. Possible values
+                    # between 0 and 1.
+                    'f_dust': [0.0],
+                    # Line width in km/s.
+                    'lines_width': [100.0],
+                    # Include nebular emission.
+                    'emission': True},
+            'dustextPHANGS':
+                {
+                    # Attenuation at 550 nm.
+                    'A550': [0.3],
+                    'filters': 'B_B90 & V_B90 & FUV'
+                },
+            'dl2014':
+                {
+                    # Mass fraction of PAH. Possible values are: 0.47, 1.12, 1.77, 2.50,
+                    # 3.19, 3.90, 4.58, 5.26, 5.95, 6.63, 7.32.
+                    'qpah': [2.5],
+                    # Minimum radiation field. Possible values are: 0.100, 0.120, 0.150,
+                    # 0.170, 0.200, 0.250, 0.300, 0.350, 0.400, 0.500, 0.600, 0.700, 0.800,
+                    # 1.000, 1.200, 1.500, 1.700, 2.000, 2.500, 3.000, 3.500, 4.000, 5.000,
+                    # 6.000, 7.000, 8.000, 10.00, 12.00, 15.00, 17.00, 20.00, 25.00, 30.00,
+                    # 35.00, 40.00, 50.00.
+                    'umin': [1.0],
+                    # Powerlaw slope dU/dM propto U^alpha. Possible values are: 1.0, 1.1,
+                    # 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5,
+                    # 2.6, 2.7, 2.8, 2.9, 3.0.
+                    'alpha': [2.0],
+                    # Fraction illuminated from Umin to Umax. Possible values between 0 and
+                    # 1.
+                    'gamma': [0.1],
+                    # Take self-absorption into account.
+                    'self_abs': False,
+                },
+            'redshifting':
+                {
+                    # Redshift of the objects. Leave empty to use the redshifts from the
+                    # input file.
+                    'redshift': [0.0]
+                }
+        }
+        self.analysis_params = {
+            # List of the physical properties to save. Leave empty to save all the
+            # physical properties (not recommended when there are many models).
+            'variables': '',
+            # If True, save the generated spectrum for each model.
+            'save_sed': True,
+            # Number of blocks to compute the models. Having a number of blocks
+            # larger than 1 can be useful when computing a very large number of
+            # models or to split the result file into smaller files.
+            'blocks': 1
         }
 

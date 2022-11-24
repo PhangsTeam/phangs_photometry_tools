@@ -14,6 +14,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
     """
     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
     """
+
     def __init__(self, hst_data_path=None, nircam_data_path=None, miri_data_path=None, target_name=None,
                  hst_data_ver='v1', nircam_data_ver='v0p4p2', miri_data_ver='v0p5'):
         """
@@ -172,7 +173,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             # speed of light in Angstrom/s
             c = speed_of_light * 1e10
             # change the conversion facto to get erg s−1 cm−2 Hz−1
-            f_nu = sensitivity * pivot_wavelength**2 / c
+            f_nu = sensitivity * pivot_wavelength ** 2 / c
             # change to get Jy
             conversion_factor = f_nu * 1e23
         else:
@@ -201,7 +202,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if load_err:
             err_file_name = self.get_hst_err_file_name(band=band)
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
-            err_data = 1/np.sqrt(err_data)
+            err_data = 1 / np.sqrt(err_data)
             err_data *= conversion_factor
             self.hst_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
                                         '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
@@ -304,7 +305,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # geta list with all observed bands in order of wavelength
         if band_list is None:
             band_list = []
-            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+            for band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
                             self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
@@ -318,7 +319,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # sort band list with increasing wavelength
         band_list = self.sort_band_list(band_list=band_list)
         for band in band_list:
-            if band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+            if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 self.load_hst_band(band=band, flux_unit=flux_unit)
             elif band in self.nircam_bands:
                 self.load_nircam_band(band=band, flux_unit=flux_unit)
@@ -326,7 +327,6 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                 self.load_miri_band(band=band, flux_unit=flux_unit)
             else:
                 raise KeyError('Band is not found in possible band lists')
-
 
         # for hst_band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
         #     if hst_band in band_list:
@@ -348,7 +348,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         if band_list is None:
             band_list = []
-            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+            for band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
                             self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
@@ -370,7 +370,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band : str
         new_unit : str
         """
-        if band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+        if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
             old_unit = self.hst_bands_data['%s_unit_img' % band]
             conversion_factor = 1
             # change to Jy
@@ -455,7 +455,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         ----------
         ra_cutout : float
         dec_cutout : float
-        cutout_size : float or tuple
+        cutout_size : float, tuple or list
             Units in arcsec. Cutout size of a box cutout. If float it will be used for both box length.
         include_err : bool
         band_list : list
@@ -468,7 +468,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # geta list with all observed bands in order of wavelength
         if band_list is None:
             band_list = []
-            for band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
+            for band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 if band in (self.hst_targets[self.target_name]['acs_wfc1_observed_bands'] +
                             self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']):
                     band_list.append(band)
@@ -481,49 +481,52 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             # sort bands in increasing order
             band_list = self.sort_band_list(band_list=band_list)
 
+        if not isinstance(cutout_size, list):
+            cutout_size = [cutout_size] * len(band_list)
+
         cutout_pos = SkyCoord(ra=ra_cutout, dec=dec_cutout, unit=(u.degree, u.degree), frame='fk5')
         cutout_dict = {'cutout_pos': cutout_pos}
         cutout_dict.update({'band_list': band_list})
-        for hst_band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
-            if hst_band in band_list:
+
+        for band, band_index in zip(band_list, range(len(band_list))):
+            if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 cutout_dict.update({
-                    '%s_img_cutout' % hst_band:
-                        helper_func.get_img_cutout(img=self.hst_bands_data['%s_data_img' % hst_band],
-                                                   wcs=self.hst_bands_data['%s_wcs_img' % hst_band],
-                                                   coord=cutout_pos, cutout_size=cutout_size)})
+                    '%s_img_cutout' % band:
+                        helper_func.get_img_cutout(img=self.hst_bands_data['%s_data_img' % band],
+                                                   wcs=self.hst_bands_data['%s_wcs_img' % band],
+                                                   coord=cutout_pos, cutout_size=cutout_size[band_index])})
                 if include_err:
                     cutout_dict.update({
-                        '%s_err_cutout' % hst_band:
-                            helper_func.get_img_cutout(img=self.hst_bands_data['%s_data_err' % hst_band],
-                                                       wcs=self.hst_bands_data['%s_wcs_err' % hst_band],
-                                                       coord=cutout_pos, cutout_size=cutout_size)})
-        for nircam_band in self.nircam_bands:
-            if nircam_band in band_list:
+                        '%s_err_cutout' % band:
+                            helper_func.get_img_cutout(img=self.hst_bands_data['%s_data_err' % band],
+                                                       wcs=self.hst_bands_data['%s_wcs_err' % band],
+                                                       coord=cutout_pos, cutout_size=cutout_size[band_index])})
+
+            elif band in self.nircam_bands:
                 cutout_dict.update({
-                    '%s_img_cutout' % nircam_band:
-                        helper_func.get_img_cutout(img=self.nircam_bands_data['%s_data_img' % nircam_band],
-                                                   wcs=self.nircam_bands_data['%s_wcs_img' % nircam_band],
-                                                   coord=cutout_pos, cutout_size=cutout_size)})
+                    '%s_img_cutout' % band:
+                        helper_func.get_img_cutout(img=self.nircam_bands_data['%s_data_img' % band],
+                                                   wcs=self.nircam_bands_data['%s_wcs_img' % band],
+                                                   coord=cutout_pos, cutout_size=cutout_size[band_index])})
                 if include_err:
                     cutout_dict.update({
-                        '%s_err_cutout' % nircam_band:
-                            helper_func.get_img_cutout(img=self.nircam_bands_data['%s_data_err' % nircam_band],
-                                                       wcs=self.nircam_bands_data['%s_wcs_err' % nircam_band],
-                                                       coord=cutout_pos, cutout_size=cutout_size)})
-        for miri_band in self.miri_bands:
-            if miri_band in band_list:
+                        '%s_err_cutout' % band:
+                            helper_func.get_img_cutout(img=self.nircam_bands_data['%s_data_err' % band],
+                                                       wcs=self.nircam_bands_data['%s_wcs_err' % band],
+                                                       coord=cutout_pos, cutout_size=cutout_size[band_index])})
+
+            elif band in self.miri_bands:
                 cutout_dict.update({
-                    '%s_img_cutout' % miri_band:
-                        helper_func.get_img_cutout(img=self.miri_bands_data['%s_data_img' % miri_band],
-                                                   wcs=self.miri_bands_data['%s_wcs_img' % miri_band],
-                                                   coord=cutout_pos, cutout_size=cutout_size)})
+                    '%s_img_cutout' % band:
+                        helper_func.get_img_cutout(img=self.miri_bands_data['%s_data_img' % band],
+                                                   wcs=self.miri_bands_data['%s_wcs_img' % band],
+                                                   coord=cutout_pos, cutout_size=cutout_size[band_index])})
                 if include_err:
                     cutout_dict.update({
-                        '%s_err_cutout' % miri_band:
-                            helper_func.get_img_cutout(
-                                img=self.miri_bands_data['%s_data_err' % miri_band],
-                                wcs=self.miri_bands_data['%s_wcs_err' % miri_band],
-                                coord=cutout_pos, cutout_size=cutout_size)})
+                        '%s_err_cutout' % band:
+                            helper_func.get_img_cutout(img=self.miri_bands_data['%s_data_err' % band],
+                                                       wcs=self.miri_bands_data['%s_wcs_err' % band],
+                                                       coord=cutout_pos, cutout_size=cutout_size[band_index])})
 
         return cutout_dict
 
@@ -581,4 +584,79 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         sort = np.argsort(wave_list)
         # print(sort)
         return list(np.array(band_list)[sort])
+
+    def create_cigale_flux_file(self, file_path, band_list, aperture_dict_list, snr=3, name_list=None,
+                                redshift_list=None, dist_list=None):
+
+        if isinstance(aperture_dict_list, dict):
+            aperture_dict_list = [aperture_dict_list]
+
+        if name_list is None:
+            name_list = np.arange(start=0,  stop=len(aperture_dict_list)+1)
+        if redshift_list is None:
+            redshift_list = [0.0] * len(aperture_dict_list)
+        if dist_list is None:
+            dist_list = [self.dist_dict[self.target_name]['dist']] * len(aperture_dict_list)
+
+        name_list = np.array(name_list, dtype=str)
+        redshift_list = np.array(redshift_list)
+        dist_list = np.array(dist_list)
+
+
+        # create flux file
+        flux_file = open(file_path, "w")
+        # add header for all variables
+        band_name_list = self.compute_cigale_band_name_list(band_list=band_list)
+        flux_file.writelines("# id             redshift  distance   ")
+        for band_name in band_name_list:
+            flux_file.writelines(band_name + "   ")
+            flux_file.writelines(band_name + "_err" + "   ")
+        flux_file.writelines(" \n")
+
+        # fill flux file
+        for name, redshift, dist, aperture_dict in zip(name_list, redshift_list, dist_list, aperture_dict_list):
+            flux_file.writelines(" %s   %f   %f  " % (name, redshift, dist))
+            flux_list, flux_err_list = self.compute_cigale_flux_list(band_list=band_list, aperture_dict=aperture_dict,
+                                                                     snr=snr)
+            for flux, flux_err in zip(flux_list, flux_err_list):
+                flux_file.writelines("%.15f   " % flux)
+                flux_file.writelines("%.15f   " % flux_err)
+            flux_file.writelines(" \n")
+
+        flux_file.close()
+
+    def compute_cigale_flux_list(self, band_list, aperture_dict, snr=3):
+
+        flux_list = []
+        flux_err_list = []
+
+        for band in band_list:
+            flux_list.append(aperture_dict['aperture_dict_%s' % band]['flux'])
+            flux_err_list.append(aperture_dict['aperture_dict_%s' % band]['flux_err'])
+
+        flux_list = np.array(flux_list)
+        flux_err_list = np.array(flux_err_list)
+
+        # compute the upper limits
+        upper_limits = (flux_list < 0) | (flux_list/flux_err_list < snr)
+        flux_list[upper_limits] = flux_err_list[upper_limits]
+        flux_err_list[upper_limits] *= -1
+
+        return flux_list, flux_err_list
+
+    def compute_cigale_band_name_list(self, band_list):
+
+        band_name_list = []
+        for band in band_list:
+            if band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
+                band_name_list.append(band + '_ACS')
+            elif band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
+                band_name_list.append(band + '_UVIS_CHIP2')
+            elif band in self.nircam_targets[self.target_name]['observed_bands']:
+                band_name_list.append(band + 'jwst.nircam.' + band)
+            elif band in self.miri_targets[self.target_name]['observed_bands']:
+                band_name_list.append(band + 'jwst.miri.' + band)
+
+        return band_name_list
+
 

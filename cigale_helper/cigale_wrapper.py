@@ -105,17 +105,15 @@ class CigaleModelWrapper:
         }
 
         # cigale filter names
-        self.cigale_filter_names = {
+        self.cigale_filter_names_uvis = {
             'F275W': 'F275W_UVIS_CHIP2',
-            'F275W_err': 'F275W_UVIS_CHIP2_err',
             'F336W': 'F336W_UVIS_CHIP2',
-            'F336W_err': 'F336W_UVIS_CHIP2_err',
             'F438W': 'F438W_UVIS_CHIP2',
-            'F438W_err': 'F438W_UVIS_CHIP2_err',
             'F555W': 'F555W_UVIS_CHIP2',
-            'F555W_err': 'F555W_UVIS_CHIP2_err',
             'F814W': 'F814W_UVIS_CHIP2',
-            'F814W_err': 'F814W_UVIS_CHIP2_err',
+        }
+
+        self.cigale_filter_names_nircam = {
             'F200W': 'jwst.nircam.F200W',
             'F200W_err': 'jwst.nircam.F200W_err',
             'F300M': 'jwst.nircam.F300M',
@@ -292,76 +290,6 @@ class CigaleModelWrapper:
                                                   n=list_digits[param_index]) + ' ')
             label_list.append(label_string)
         return label_list
-
-    def create_cigale_data_file(self):
-        new_flux_list = np.array([flux_dict['flux_f275w'], flux_dict['flux_f336w'], flux_dict['flux_f438w'],
-                              flux_dict['flux_f555w'], flux_dict['flux_f814w'],
-                              flux_dict['flux_f200w'], flux_dict['flux_f300m'], flux_dict['flux_f335m'],
-                              flux_dict['flux_f360m'],
-                              flux_dict['flux_f770w'], flux_dict['flux_f1000w'], flux_dict['flux_f1130w'],
-                              flux_dict['flux_f2100w']])
-
-
-        new_flux_err_list = np.array([flux_dict['flux_err_f275w'], flux_dict['flux_err_f336w'], flux_dict['flux_err_f438w'],
-                                      flux_dict['flux_err_f555w'], flux_dict['flux_err_f814w'],
-                                      flux_dict['flux_err_f200w'], flux_dict['flux_err_f300m'], flux_dict['flux_err_f335m'],
-                                      flux_dict['flux_err_f360m'],
-                                      flux_dict['flux_err_f770w'], flux_dict['flux_err_f1000w'], flux_dict['flux_err_f1130w'],
-                                      flux_dict['flux_err_f2100w']])
-
-        upper_limit = (new_flux_list / new_flux_err_list < 5) | (new_flux_list < 0)
-        print('upper_limit ', upper_limit)
-        cluster_dict.update({'flux_%i' % list_index: new_flux_list,
-                             'flux_err_%i' % list_index: new_flux_err_list,
-                             'upper_limit_%i' % list_index: upper_limit})
-
-        #
-        # plt.scatter(np.array(wave_list), np.array(flux_list[:, list_index]))
-        # plt.scatter(np.array(wave_list), np.array(new_flux_list))
-        # plt.xscale('log')
-        # plt.yscale('log')
-        # plt.show()
-
-
-
-
-
-    band_string = 'bands = '
-    for index in range(len(band_names)):
-        band_string += band_names[index]
-        if index < (len(band_names) -1):
-            band_string += ', '
-    print(band_string)
-
-    flux_file = open("flux_file.dat", "w")
-
-    flux_file.writelines("# id             redshift  distance   ")
-    for index in range(len(band_names)):
-        flux_file.writelines(band_names[index] + "   ")
-    flux_file.writelines(" \n")
-
-
-    # for cluster_index in range(flux_list.shape[2]):
-    #     flux_file.writelines(" %i   0.0   " % cluster_index)
-    #     for band_index in range(flux_list.shape[0]):
-    #         flux_file.writelines("%.15f   " % flux_list[band_index, cluster_index])
-    #         flux_file.writelines("%.15f   " % err_list[band_index, cluster_index])
-    #     flux_file.writelines(" \n")
-
-
-    for cluster_index in [2]:
-        flux_file.writelines(" %i   0.0   18.0  " % cluster_index)
-        for band_index in range(len(new_flux_list)):
-            if cluster_dict['upper_limit_%i' % cluster_index][band_index]:
-                flux_file.writelines("%.15f   " % (np.max([cluster_dict['flux_err_%i' % cluster_index][band_index], 0]) +
-                                                   cluster_dict['flux_err_%i' % cluster_index][band_index]))
-                flux_file.writelines("%.15f   " % (-cluster_dict['flux_err_%i' % cluster_index][band_index]))
-            else:
-                flux_file.writelines("%.15f   " % (cluster_dict['flux_%i' % cluster_index][band_index]))
-                flux_file.writelines("%.15f   " % (cluster_dict['flux_err_%i' % cluster_index][band_index]))
-        flux_file.writelines(" \n")
-
-    flux_file.close()
 
 
 

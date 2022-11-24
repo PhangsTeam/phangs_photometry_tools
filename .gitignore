@@ -147,3 +147,4 @@ dmypy.json
 # exceptions
 # all example data should be provided
 !examples/**/*.dat
+!data/*.dat

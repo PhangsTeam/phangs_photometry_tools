@@ -8,6 +8,7 @@ from matplotlib.colorbar import ColorbarBase
 from matplotlib.colors import Normalize, LogNorm
 from matplotlib.patches import Ellipse
 from matplotlib import transforms
+import matplotlib.image as mpimg
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u
@@ -16,9 +17,6 @@ from astropy.visualization.wcsaxes import SphericalCircle
 from astropy.visualization import make_lupton_rgb
 from reproject import reproject_interp
 from astropy.io import fits
-
-import photometry_tools.basic_attributes
-from photometry_tools import basic_attributes
 
 
 class PlotPhotometry:
@@ -53,7 +51,7 @@ class PlotPhotometry:
         # get figure
         figure = plt.figure(figsize=figsize)
         # arrange axis
-        axis_dict = add_axis_hst_nircam_miri(figure=figure, hst_band_list=hst_band_list,
+        axis_dict = add_axis_hst_nircam_miri_panel(figure=figure, hst_band_list=hst_band_list,
                                              nircam_band_list=nircam_band_list, miri_band_list=miri_band_list,
                                              cutout_dict=cutout_dict)
 
@@ -167,7 +165,7 @@ class PlotPhotometry:
         # get figure
         figure = plt.figure(figsize=figsize)
         # arrange axis
-        axis_dict = add_axis_hst_nircam_miri(figure=figure, hst_band_list=hst_band_list,
+        axis_dict = add_axis_hst_nircam_miri_panel(figure=figure, hst_band_list=hst_band_list,
                                              nircam_band_list=nircam_band_list, miri_band_list=miri_band_list,
                                              cutout_dict=cutout_dict)
 
@@ -362,6 +360,10 @@ class PlotPhotometry:
 
         colors = ['tab:blue', 'tab:orange', 'tab:green']
         # plot all apertures
+
+        if isinstance(aperture_dict_list, dict):
+            aperture_dict_list = [aperture_dict_list]
+
         for aperture_dict, aperture_index in zip(aperture_dict_list, range(len(aperture_dict_list))):
             plot_coord_circle(ax=ax_rgb, pos=aperture_dict['init_pos'], rad=aperture_dict['recenter_rad'], linewidth=1,
                               color='white')
@@ -381,32 +383,145 @@ class PlotPhotometry:
         # ax_sed.set_xlim(200 * 1e-3, 3e1)
         # ax_sed.set_ylim(0.0000009, 3e4)
 
+        return figure
+
+
+    @staticmethod
+    def plot_cigale_sed_panel(hst_band_list, nircam_band_list, miri_band_list, cutout_dict, aperture_dict,
+                              cigale_logo_file_name=None, filter_colors=None, fontsize=33, x_axis=True):
+
+        if filter_colors is None:
+            filter_colors = np.array(['k', 'k', 'k', 'k', 'k', 'tab:blue', 'tab:orange', 'tab:green', 'tab:red',
+                                      'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray'])
+
+        # plotting
+        figure = plt.figure(figsize=(30, 10))
+
+        ax_sed = figure.add_axes([0.06, 0.09, 0.935, 0.905])
+
+        if cigale_logo_file_name is not None:
+            ax_cigale_logo = figure.add_axes([0.885, 0.31, 0.15, 0.15])
+            ax_cigale_logo.imshow(mpimg.imread(cigale_logo_file_name))
+            ax_cigale_logo.axis('off')
+
+        # get axis for postage stamps
+        axis_dict = add_axis_hst_nircam_miri_postage(figure=figure, hst_band_list=hst_band_list,
+                                                     nircam_band_list=nircam_band_list, miri_band_list=miri_band_list,
+                                                     cutout_dict=cutout_dict)
+
+        # plot the postage_staps
+        plot_postage_stamps(axis_dict=axis_dict, cutout_dict=cutout_dict, aperture_dict=aperture_dict,
+                            filter_colors=filter_colors, fontsize=fontsize, show_ax_index=['F275W', 'F200W', 'F770W'])
+
+        plot_sed_data_points(ax=ax_sed, band_list=cutout_dict['band_list'], aperture_dict=aperture_dict,
+                             color=filter_colors, annotation=None, line_color='k')
+
+
+        ax_sed.set_ylabel(r'S$_{\nu}$ (mJy)', fontsize=fontsize)
+        ax_sed.tick_params(axis='both', which='both', width=4, length=5, direction='in', pad=10, labelsize=fontsize)
+        ax_sed.set_xlim(200 * 1e-3, 3e1)
+        ax_sed.set_ylim(0.0000009, 3e4)
+        ax_sed.set_xscale('log')
+        ax_sed.set_yscale('log')
+
+        if x_axis:
+            ax_sed.set_xlabel(r'Observed ${\lambda}$ ($\mu$m)', labelpad=-8, fontsize=fontsize)
+        else:
+            ax_sed.set_xticklabels([])
 
         return figure
 
 
-def plot_sed_data_points(ax, bands, aperture_dict, color, annotation):
-    flux = []
-    flux_err = []
-    wave = []
-    for band in bands:
-        flux.append(aperture_dict['aperture_dict_%s' % band]['flux'])
-        flux_err.append(aperture_dict['aperture_dict_%s' % band]['flux_err'])
-        wave.append(aperture_dict['aperture_dict_%s' % band]['wave'])
+def add_axis_hst_nircam_miri_postage(figure, hst_band_list, nircam_band_list, miri_band_list, cutout_dict):
 
-    flux = np.array(flux)
-    flux_err = np.array(flux_err)
-    upper_limit_mask = (flux < 0) | (flux < 3 * flux_err)
-    wave = np.array(wave)
+    axis_dict = {}
 
-    ax.errorbar(wave[~upper_limit_mask], flux[~upper_limit_mask], yerr=flux_err[~upper_limit_mask], ms=15, ecolor='k',
-                fmt='o', color=color)
-    ax.plot(wave[~upper_limit_mask], flux[~upper_limit_mask], color=color, label=annotation)
+    for hst_band, index in zip(hst_band_list, range(len(hst_band_list))):
+        ax = figure.add_axes([0.02 + index * 0.065, 0.71, 0.19, 0.19],
+                             projection=cutout_dict['%s_img_cutout' % hst_band].wcs)
+        axis_dict.update({'ax_%s' % hst_band: ax})
 
-    ax.errorbar(wave[upper_limit_mask], 3*flux_err[upper_limit_mask],
-                yerr=flux_err[upper_limit_mask],
-                ecolor=color,
-                elinewidth=5, capsize=10, fmt='.',  uplims=True, xlolims=False)
+    for nircam_band, index in zip(nircam_band_list, range(len(nircam_band_list))):
+        ax = figure.add_axes([0.37 + index * 0.065, 0.71, 0.19, 0.19],
+                             projection=cutout_dict['%s_img_cutout' % nircam_band].wcs)
+        axis_dict.update({'ax_%s' % nircam_band: ax})
+
+    for miri_band, index in zip(miri_band_list, range(len(miri_band_list))):
+        ax = figure.add_axes([0.65 + index * 0.065, 0.71, 0.19, 0.19],
+                             projection=cutout_dict['%s_img_cutout' % miri_band].wcs)
+        axis_dict.update({'ax_%s' % miri_band: ax})
+
+    return axis_dict
+
+
+def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fontsize=15, show_ax_index=None):
+
+    band_list = cutout_dict['band_list']
+
+    if show_ax_index is None:
+        show_ax_index = ['None']
+    elif isinstance(show_ax_index, str):
+        show_ax_index = [show_ax_index]
+
+    for band, band_index in zip(band_list, range(len(band_list))):
+        m, s = np.nanmean(cutout_dict['%s_img_cutout' % band].data), np.nanstd(cutout_dict['%s_img_cutout' % band].data)
+        axis_dict['ax_%s' % band].imshow(cutout_dict['%s_img_cutout' % band].data, cmap='Greys', vmin=m-s, vmax=m+5*s)
+        plot_coord_circle(ax=axis_dict['ax_%s' % band], pos=aperture_dict['aperture_dict_%s' % band]['new_pos'],
+                          rad=aperture_dict['aperture_rad_dict']['aperture_%s' % band], color='r',
+                          linewidth=2)
+        axis_dict['ax_%s' % band].set_title(band.upper(), fontsize=fontsize, color=filter_colors[band_index])
+        if band in show_ax_index:
+            axis_dict['ax_%s' % band].tick_params(axis='both', which='both', width=3, length=7, direction='in',
+                                                  color='k', labelsize=fontsize-11)
+            axis_dict['ax_%s' % band].coords['dec'].set_ticklabel(rotation=90)
+            axis_dict['ax_%s' % band].coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.3, fontsize=fontsize-11)
+            axis_dict['ax_%s' % band].coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize-11)
+            axis_dict['ax_%s' % band].coords['ra'].set_ticks(number=2)
+            axis_dict['ax_%s' % band].coords['ra'].display_minor_ticks(True)
+            axis_dict['ax_%s' % band].coords['dec'].set_ticks(number=2)
+            axis_dict['ax_%s' % band].coords['dec'].display_minor_ticks(True)
+        else:
+            erase_wcs_axis(axis_dict['ax_%s' % band])
+
+
+def erase_wcs_axis(ax):
+    ax.coords['ra'].set_ticklabel_visible(False)
+    ax.coords['ra'].set_axislabel(' ')
+    ax.coords['dec'].set_ticklabel_visible(False)
+    ax.coords['dec'].set_axislabel(' ')
+    ax.tick_params(axis='both', which='both', width=0.00001, direction='in', color='k')
+
+
+def plot_sed_data_points(ax, band_list, aperture_dict, color, annotation=None, line_color=None, snr_plot=3, snr_detect=5):
+
+    if isinstance(color, str):
+        color = [color] * len(band_list)
+
+    flux_list = []
+    flux_err_list = []
+    wave_list = []
+    for band, band_index in zip(band_list, range(len(band_list))):
+        flux = aperture_dict['aperture_dict_%s' % band]['flux']
+        flux_err = aperture_dict['aperture_dict_%s' % band]['flux_err']
+        wave = aperture_dict['aperture_dict_%s' % band]['wave']
+
+        flux_list.append(flux)
+        flux_err_list.append(flux_err)
+        wave_list.append(wave)
+
+        if (flux < 0) | (flux < snr_detect * flux_err):
+            ax.errorbar(wave, snr_plot*flux_err,  yerr=flux_err, ecolor=color[band_index],
+                        elinewidth=5, capsize=10, uplims=True, xlolims=False)
+        else:
+            ax.errorbar(wave, flux, yerr=flux_err, ms=15, ecolor='k', fmt='o', color=color[band_index])
+
+    wave_list = np.array(wave_list)
+    flux_list = np.array(flux_list)
+    flux_err_list = np.array(flux_err_list)
+
+    upper_limit_mask = (flux_list < 0) | (flux_list < snr_detect * flux_err_list)
+    if line_color is not None:
+        ax.plot(wave_list[~upper_limit_mask], flux_list[~upper_limit_mask], color=line_color, label=annotation)
 
 
 def compute_rgb_image(cutout_dict, band_name_r, band_name_g, band_name_b,
@@ -452,7 +567,7 @@ def reproject_image(data, wcs, new_wcs, new_shape):
     return reproject_interp(hdu, new_wcs, shape_out=new_shape, return_footprint=False)
 
 
-def add_axis_hst_nircam_miri(figure, hst_band_list, nircam_band_list, miri_band_list, cutout_dict, cbar=True):
+def add_axis_hst_nircam_miri_panel(figure, hst_band_list, nircam_band_list, miri_band_list, cutout_dict, cbar=True):
     axis_dict = {}
     if cbar:
         ax_color_bar_hst = figure.add_axes([0.925, 0.68, 0.015, 0.28])
@@ -530,9 +645,9 @@ def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
 
     # get maximal value
     if vmax_vmin is None:
-        list_of_means = [np.mean(cutout) for cutout in cutout_list]
-        list_of_stds = [np.std(cutout) for cutout in cutout_list]
-        mean, std = (np.mean(list_of_means), np.std(list_of_stds))
+        list_of_means = [np.nanmean(cutout) for cutout in cutout_list]
+        list_of_stds = [np.nanstd(cutout) for cutout in cutout_list]
+        mean, std = (np.nanmean(list_of_means), np.nanstd(list_of_stds))
 
         vmin = mean - 1 * std
         vmax = mean + 10 * std
@@ -619,6 +734,7 @@ def text_annotation(ax, pos, text, color='k', rotation=0, horizontalalignment=No
     ax.text(pos.ra.degree, pos.dec.degree, text, color=color, fontsize=fontsize, rotation=rotation,
             horizontalalignment='right', transform=ax.get_transform('fk5'))
 
+
 def mulit_color_text_annotation(figure, ax, list_strings, list_color, pos, fontsize=15):
     t = ax.get_transform('fk5')
     for s, c in zip(list_strings, list_color):
@@ -626,6 +742,7 @@ def mulit_color_text_annotation(figure, ax, list_strings, list_color, pos, fonts
         text.draw(figure.canvas.get_renderer())
         ex = text.get_window_extent()
         t = transforms.offset_copy(text._transform, x=ex.width, units='dots')
+
 
 def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2):
     if isinstance(box_size, tuple):
