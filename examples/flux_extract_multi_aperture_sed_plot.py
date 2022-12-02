@@ -19,70 +19,63 @@ phangs_photometry = AnalysisTools(hst_data_path='/home/benutzer/data/PHANGS-HST'
 # load all data
 phangs_photometry.load_hst_nircam_miri_bands(flux_unit='mJy')
 
-ra_center = 24.173946 - 33.5 / 3600
-dec_center = 15.783662 - 27.5 / 3600
+ra = 24.173946 - 33.5 / 3600
+dec = 15.783662 - 27.6 / 3600
 # size of image
 size_of_cutout = (5, 5)
 axis_length = (size_of_cutout[0] - 0.1, size_of_cutout[1] - 0.1)
-cutout_dict = phangs_photometry.get_band_cutout_dict(ra_cutout=ra_center, dec_cutout=dec_center,
+cutout_dict = phangs_photometry.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec,
                                                      cutout_size=size_of_cutout, include_err=True)
+source = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree), frame='fk5')
 
-source_pos_1 = SkyCoord(ra=ra_center - 0.11 / 3600, dec=dec_center - 0.21 / 3600, unit=(u.degree, u.degree), frame='fk5')
-source_pos_2 = SkyCoord(ra=ra_center + 0.41 / 3600, dec=dec_center + 0.03 / 3600, unit=(u.degree, u.degree), frame='fk5')
-source_pos_3 = SkyCoord(ra=ra_center + 0.2 / 3600, dec=dec_center + 0.96 / 3600, unit=(u.degree, u.degree), frame='fk5')
-source_list = [source_pos_1, source_pos_2, source_pos_3]
-
-aperture_dict_list = []
+# get a list of all the hst bands in the correct order
+hst_bands = phangs_photometry.sort_band_list(
+    band_list=(phangs_photometry.hst_targets[phangs_photometry.target_name]['acs_wfc1_observed_bands'] +
+               phangs_photometry.hst_targets[phangs_photometry.target_name]['wfc3_uvis_observed_bands']))
 
 
-for source in source_list:
+# compute flux from 50% encircled energy
+aperture_dict = phangs_photometry.circular_flux_aperture_from_cutouts(cutout_dict=cutout_dict, pos=source,
+                                                                      recenter=True, recenter_rad=0.25,
+                                                                      default_ee_rad=50)
 
-    # compute flux from 50% encircled energy
-    aperture_dict = phangs_photometry.circular_flux_aperture_from_cutouts(cutout_dict=cutout_dict, pos=source,
-                                                                          recenter=True, recenter_rad=0.15)
-    # print the measured fluxes
-    for band in cutout_dict['band_list']:
-        print(band, ' = %.6f ' % aperture_dict['aperture_dict_%s' % band]['flux'], '+/- ',
-              '%.6f mJy' % aperture_dict['aperture_dict_%s' % band]['flux_err'])
-    aperture_dict_list.append(aperture_dict)
+# make the plot to inspect the aperture extraction
+fig = PlotPhotometry.plot_circ_flux_extraction(
+        hst_band_list=hst_bands,
+        nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
+        miri_band_list=phangs_photometry.miri_targets[phangs_photometry.target_name]['observed_bands'],
+        cutout_dict=cutout_dict, aperture_dict=aperture_dict,
+        # vmax_vmin_hst=(0.05, 1.5), vmax_vmin_nircam=(0.1, 21), vmax_vmin_miri=(0.1, 21),
+        # cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
+        cmap_hst='Greys', cmap_nircam='Greys', cmap_miri='Greys',
+        log_scale=True, axis_length=axis_length)
+
+if not os.path.isdir('plot_output'):
+    os.makedirs('plot_output')
+
+fig.savefig('plot_output/circ_aperture.png')
+fig.clf()
+
+
+# print the measured fluxes
+for band in cutout_dict['band_list']:
+    print(band, ' = %.6f ' % aperture_dict['aperture_dict_%s' % band]['flux'], '+/- ',
+          '%.6f mJy' % aperture_dict['aperture_dict_%s' % band]['flux_err'])
 
 # for plotting we want to use MJy/sr thus we convert the flux and
 phangs_photometry.change_hst_nircam_miri_band_units(new_unit='MJy/sr')
-# cutout_dict_new = phangs_photometry.get_band_cutout_dict(ra_cutout=ra_center, dec_cutout=dec_center,
-#                                                          cutout_size=size_of_cutout, include_err=True)
 
-# # sort bands
-# hst_bands = phangs_photometry.sort_band_list(
-#     band_list=(phangs_photometry.hst_targets[phangs_photometry.target_name]['acs_wfc1_observed_bands'] +
-#                phangs_photometry.hst_targets[phangs_photometry.target_name]['wfc3_uvis_observed_bands']))
-# for source_index in range(len(source_list)):
-#
-#     # plot the results
-#     fig = PlotPhotometry.plot_circ_flux_extraction(
-#         hst_band_list=hst_bands,
-#         nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
-#         miri_band_list=phangs_photometry.miri_targets[phangs_photometry.target_name]['observed_bands'],
-#         cutout_dict=cutout_dict, aperture_dict=aperture_dict_list[source_index],
-#         vmax_vmin_hst=(0.05, 1.5), vmax_vmin_nircam=(0.1, 21), vmax_vmin_miri=(0.1, 21),
-#         # cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
-#         cmap_hst='Greys', cmap_nircam='Greys', cmap_miri='Greys',
-#         log_scale=True, axis_length=axis_length)
-#
-#     if not os.path.isdir('plot_output'):
-#         os.makedirs('plot_output')
-#
-#     fig.savefig('plot_output/circ_aperture_%i.png' % source_index)
-#     fig.clf()
+# # # in case you want different cutout sizes
+# cutout_dict = phangs_photometry.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec,
+#                                                      cutout_size=[2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+#                                                      include_err=True)
 
+figure = PlotPhotometry.plot_cigale_sed_panel(
+        hst_band_list=hst_bands,
+        nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
+        miri_band_list=phangs_photometry.miri_targets[phangs_photometry.target_name]['observed_bands'],
+        cutout_dict=cutout_dict, aperture_dict=aperture_dict)
 
-figure = PlotPhotometry.plot_rgb_with_sed(cutout_dict=cutout_dict, band_name_b='F435W', band_name_g='F200W', band_name_r='F770W',
-                                 aperture_dict_list=aperture_dict_list,
-                                 amp_fact_r=1, amp_fact_g=1, amp_fact_b=10,
-                                 axis_length=axis_length,
-                                 reproject_to='F435W')
-
-
-figure.savefig('plot_output/rgb_sed.png')
-
-
+figure.savefig('plot_output/test_sed.png')
+figure.clf()
 

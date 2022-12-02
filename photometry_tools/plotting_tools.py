@@ -417,7 +417,10 @@ class PlotPhotometry:
     @staticmethod
     def plot_cigale_sed_panel(hst_band_list, nircam_band_list, miri_band_list, cutout_dict, aperture_dict,
                               cigale_logo_file_name=None, filter_colors=None, fontsize=33, x_axis=True,
-                              title=None):
+                              title=None, show_ax_label=None):
+
+        if show_ax_label is None:
+            show_ax_label = ['F275W']
 
         if filter_colors is None:
             filter_colors = np.array(['k', 'k', 'k', 'k', 'k', 'tab:blue', 'tab:orange', 'tab:green', 'tab:red',
@@ -440,7 +443,7 @@ class PlotPhotometry:
 
         # plot the postage_staps
         plot_postage_stamps(axis_dict=axis_dict, cutout_dict=cutout_dict, aperture_dict=aperture_dict,
-                            filter_colors=filter_colors, fontsize=fontsize, show_ax_index=['F275W', 'F200W', 'F770W'])
+                            filter_colors=filter_colors, fontsize=fontsize, show_ax_label=show_ax_label)
 
         plot_sed_data_points(ax=ax_sed, band_list=cutout_dict['band_list'], aperture_dict=aperture_dict,
                              color=filter_colors, annotation=None, line_color='k')
@@ -489,14 +492,14 @@ def add_axis_hst_nircam_miri_postage(figure, hst_band_list, nircam_band_list, mi
     return axis_dict
 
 
-def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fontsize=15, show_ax_index=None):
+def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fontsize=15, show_ax_label=None):
 
     band_list = cutout_dict['band_list']
 
-    if show_ax_index is None:
-        show_ax_index = ['None']
-    elif isinstance(show_ax_index, str):
-        show_ax_index = [show_ax_index]
+    if show_ax_label is None:
+        show_ax_label = ['None']
+    elif isinstance(show_ax_label, str):
+        show_ax_label = [show_ax_label]
 
     for band, band_index in zip(band_list, range(len(band_list))):
         m, s = np.nanmean(cutout_dict['%s_img_cutout' % band].data), np.nanstd(cutout_dict['%s_img_cutout' % band].data)
@@ -505,7 +508,7 @@ def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fo
                           rad=aperture_dict['aperture_rad_dict']['aperture_%s' % band], color='r',
                           linewidth=2)
         axis_dict['ax_%s' % band].set_title(band.upper(), fontsize=fontsize, color=filter_colors[band_index])
-        if band in show_ax_index:
+        if band in show_ax_label:
             axis_dict['ax_%s' % band].tick_params(axis='both', which='both', width=3, length=7, direction='in',
                                                   color='k', labelsize=fontsize-11)
             axis_dict['ax_%s' % band].coords['dec'].set_ticklabel(rotation=90)
