@@ -13,13 +13,15 @@ class AnalysisTools(data_access.DataAccess):
     """
     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
     """
+
     def __init__(self, **kwargs):
         """
 
         """
         super().__init__(**kwargs)
 
-    def circular_flux_aperture_from_cutouts(self, cutout_dict, pos, apertures=None, recenter=False, recenter_rad=0.2):
+    def circular_flux_aperture_from_cutouts(self, cutout_dict, pos, apertures=None, recenter=False, recenter_rad=0.2,
+                                            default_ee_rad=50):
         """
 
         Parameters
@@ -29,6 +31,8 @@ class AnalysisTools(data_access.DataAccess):
         apertures : float or list of float
         recenter : bool
         recenter_rad : float
+        default_ee_rad : int
+            is either 50 or 80. This will only be
 
         Returns
         -------
@@ -40,15 +44,18 @@ class AnalysisTools(data_access.DataAccess):
             for band in cutout_dict['band_list']:
                 if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
                     aperture_rad_dict.update({
-                        'aperture_%s' % band: self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee50']})
+                        'aperture_%s' % band:
+                            self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee%i' % default_ee_rad]})
                 if band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
                     aperture_rad_dict.update({
-                        'aperture_%s' % band: self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee50']})
+                        'aperture_%s' % band:
+                            self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee%i' % default_ee_rad]})
                 if band in self.nircam_bands:
                     aperture_rad_dict.update({
-                        'aperture_%s' % band: self.nircam_encircle_apertures_arcsec[band]['ee50']})
+                        'aperture_%s' % band: self.nircam_encircle_apertures_arcsec[band]['ee%i' % default_ee_rad]})
                 if band in self.miri_bands:
-                    aperture_rad_dict.update({'aperture_%s' % band: self.miri_encircle_apertures_arcsec[band]['ee50']})
+                    aperture_rad_dict.update({
+                        'aperture_%s' % band: self.miri_encircle_apertures_arcsec[band]['ee%i' % default_ee_rad]})
 
         # A fixed aperture for all bands
         elif isinstance(apertures, float):
@@ -139,8 +146,8 @@ class AnalysisTools(data_access.DataAccess):
         else:
             x_cords_sources = source_table['x']
             y_cords_sources = source_table['y']
-            source_table_in_search_radius = np.sqrt((x_cords_sources - pixel_coordinates[0])**2 +
-                                                    (y_cords_sources - pixel_coordinates[1])**2) < pix_radius
+            source_table_in_search_radius = np.sqrt((x_cords_sources - pixel_coordinates[0]) ** 2 +
+                                                    (y_cords_sources - pixel_coordinates[1]) ** 2) < pix_radius
             if np.sum(source_table_in_search_radius) == 0:
                 # print('the object detected was not in the radius')
                 new_pixel_coordinates = pixel_coordinates
@@ -153,8 +160,8 @@ class AnalysisTools(data_access.DataAccess):
                 peak = source_table['peak']
                 max_peak_in_rad = np.max(peak[source_table_in_search_radius])
                 # print('max_peak_in_rad ', peak == max_peak_in_rad)
-                new_pixel_coordinates = (x_cords_sources[source_table_in_search_radius*(peak == max_peak_in_rad)],
-                                         y_cords_sources[source_table_in_search_radius*(peak == max_peak_in_rad)])
+                new_pixel_coordinates = (x_cords_sources[source_table_in_search_radius * (peak == max_peak_in_rad)],
+                                         y_cords_sources[source_table_in_search_radius * (peak == max_peak_in_rad)])
 
         return new_pixel_coordinates, source_table
 
@@ -175,7 +182,7 @@ class AnalysisTools(data_access.DataAccess):
         """
         # get radius in pixel scale
         pix_radius = (wcs.world_to_pixel(pos)[0] -
-                      wcs.world_to_pixel(SkyCoord(ra=pos.ra+recenter_rad*u.arcsec, dec=pos.dec))[0])
+                      wcs.world_to_pixel(SkyCoord(ra=pos.ra + recenter_rad * u.arcsec, dec=pos.dec))[0])
         # get the coordinates in pixel scale
         pixel_coordinates = wcs.world_to_pixel(pos)
 
@@ -213,7 +220,7 @@ class AnalysisTools(data_access.DataAccess):
         bkg = sep.Background(np.array(data, dtype=float))
         # get radius in pixel scale
         pix_radius = (wcs.world_to_pixel(pos)[0] -
-                      wcs.world_to_pixel(SkyCoord(ra=pos.ra+aperture_rad*u.arcsec, dec=pos.dec))[0])
+                      wcs.world_to_pixel(SkyCoord(ra=pos.ra + aperture_rad * u.arcsec, dec=pos.dec))[0])
         # get the coordinates in pixel scale
         pixel_coords = wcs.world_to_pixel(pos)
 
@@ -229,5 +236,3 @@ class AnalysisTools(data_access.DataAccess):
                                               err=data_err)
 
         return float(flux), float(flux_err)
-
-

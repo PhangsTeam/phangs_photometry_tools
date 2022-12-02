@@ -48,12 +48,14 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         self.nircam_bands_data = {}
         self.miri_bands_data = {}
 
-    def get_hst_img_file_name(self, band):
+    def get_hst_img_file_name(self, band, hst_data_folder=None, file_name=None):
         """
 
         Parameters
         ----------
         band : str
+        hst_data_folder : str
+        file_name : str
 
         Returns
         -------
@@ -62,18 +64,25 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if (band not in self.hst_acs_wfc1_bands) & (band not in self.hst_wfc3_uvis2_bands):
             raise AttributeError('The band <%s> is not in the list of possible HST bands.' % band)
 
-        hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
-                           self.hst_targets[self.target_name]['folder_name'])
+        if hst_data_folder is None:
+            hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
+                               self.hst_targets[self.target_name]['folder_name'])
         ending_of_band_file = '%s_%s_exp-drc-sci.fits' % (band.lower(), self.hst_data_ver)
 
-        return helper_func.identify_file_in_folder(folder_path=hst_data_folder, str_in_file_name=ending_of_band_file)
+        if file_name is None:
+            return helper_func.identify_file_in_folder(folder_path=hst_data_folder,
+                                                       str_in_file_name=ending_of_band_file)
+        else:
+            return Path(hst_data_folder) / Path(file_name)
 
-    def get_hst_err_file_name(self, band):
+    def get_hst_err_file_name(self, band, hst_data_folder=None, file_name=None):
         """
 
         Parameters
         ----------
         band : str
+        hst_data_folder : str
+        file_name : str
 
         Returns
         -------
@@ -81,19 +90,26 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         if (band not in self.hst_acs_wfc1_bands) & (band not in self.hst_wfc3_uvis2_bands):
             raise AttributeError('The band <%s> is not in the list of possible HST bands.' % band)
+        if hst_data_folder is None:
+            hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
+                               self.hst_targets[self.target_name]['folder_name'])
 
-        hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
-                           self.hst_targets[self.target_name]['folder_name'])
         ending_of_band_file = '%s_%s_err-drc-wht.fits' % (band.lower(), self.hst_data_ver)
 
-        return helper_func.identify_file_in_folder(folder_path=hst_data_folder, str_in_file_name=ending_of_band_file)
+        if file_name is None:
+            return helper_func.identify_file_in_folder(folder_path=hst_data_folder,
+                                                       str_in_file_name=ending_of_band_file)
+        else:
+            return Path(hst_data_folder) / Path(file_name)
 
-    def get_nircam_img_file_name(self, band):
+    def get_nircam_img_file_name(self, band, nircam_data_folder=None, file_name=None):
         """
 
         Parameters
         ----------
         band : str
+        nircam_data_folder : str
+        file_name : str
 
         Returns
         -------
@@ -102,18 +118,25 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if band not in self.nircam_bands:
             raise AttributeError('The band <%s> is not in the list of possible NIRCAM bands.' % band)
 
-        nircam_data_folder = (self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver] /
-                              self.nircam_targets[self.target_name]['folder_name'])
+        if nircam_data_folder is None:
+            nircam_data_folder = (self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver] /
+                                  self.nircam_targets[self.target_name]['folder_name'])
         ending_of_band_file = 'nircam_lv3_%s_i2d_align.fits' % band.lower()
+        if file_name is None:
+            return helper_func.identify_file_in_folder(folder_path=nircam_data_folder,
+                                                       str_in_file_name=ending_of_band_file)
+        else:
+            return Path(nircam_data_folder) / Path(file_name)
 
-        return helper_func.identify_file_in_folder(folder_path=nircam_data_folder, str_in_file_name=ending_of_band_file)
-
-    def get_miri_img_file_name(self, band):
+    def get_miri_img_file_name(self, band, miri_data_folder=None, file_name=None):
         """
 
         Parameters
         ----------
         band : str
+        miri_data_folder : str
+        file_name : str
+
 
         Returns
         -------
@@ -122,17 +145,23 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if band not in self.miri_bands:
             raise AttributeError('The band <%s> is not in the list of possible MIRI bands.' % band)
 
-        miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
+        if miri_data_folder is None:
+            miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
         ending_of_band_file = '%s_miri_%s_anchored.fits' % (self.target_name, band.lower())
+        if file_name is None:
+            return helper_func.identify_file_in_folder(folder_path=miri_data_folder,
+                                                       str_in_file_name=ending_of_band_file)
+        else:
+            return Path(miri_data_folder) / Path(file_name)
 
-        return helper_func.identify_file_in_folder(folder_path=miri_data_folder, str_in_file_name=ending_of_band_file)
-
-    def get_miri_err_file_name(self, band):
+    def get_miri_err_file_name(self, band, miri_data_folder=None, file_name=None):
         """
 
         Parameters
         ----------
         band : str
+        miri_data_folder : str
+        file_name : str
 
         Returns
         -------
@@ -141,12 +170,17 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if band not in self.miri_bands:
             raise AttributeError('The band <%s> is not in the list of possible MIRI bands.' % band)
 
-        miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
+        if miri_data_folder is None:
+            miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
         ending_of_band_file = '%s_miri_%s_noisemap.fits' % (self.target_name, band.lower())
+        if file_name is None:
+            return helper_func.identify_file_in_folder(folder_path=miri_data_folder,
+                                                       str_in_file_name=ending_of_band_file)
+        else:
+            return Path(miri_data_folder) / Path(file_name)
 
-        return helper_func.identify_file_in_folder(folder_path=miri_data_folder, str_in_file_name=ending_of_band_file)
-
-    def load_hst_band(self, band, load_err=True, flux_unit='Jy'):
+    def load_hst_band(self, band, load_err=True, flux_unit='Jy', hst_data_folder=None, img_file_name=None,
+                      err_file_name=None):
         """
 
         Parameters
@@ -154,13 +188,13 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band : str
         load_err : bool
         flux_unit : str
+        hst_data_folder : str
+        img_file_name : str
+        err_file_name : str
         """
         # load the band observations
-        img_file_name = self.get_hst_img_file_name(band=band)
+        img_file_name = self.get_hst_img_file_name(band=band, hst_data_folder=hst_data_folder, file_name=img_file_name)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=img_file_name)
-
-        # for key in img_header.keys():
-        #     print(key, img_header[key])
 
         # convert the flux unit
         if 'PHOTFNU' in img_header:
@@ -200,7 +234,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                     '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
                                     '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
-            err_file_name = self.get_hst_err_file_name(band=band)
+            err_file_name = self.get_hst_err_file_name(band=band, hst_data_folder=hst_data_folder,
+                                                       file_name=err_file_name)
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
             err_data = 1 / np.sqrt(err_data)
             err_data *= conversion_factor
@@ -208,7 +243,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                         '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
                                         '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
-    def load_nircam_band(self, band, load_err=True, flux_unit='Jy'):
+    def load_nircam_band(self, band, load_err=True, flux_unit='Jy', nircam_data_folder=None, img_file_name=None):
         """
 
         Parameters
@@ -216,9 +251,13 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band : str
         load_err : bool
         flux_unit : str
+        nircam_data_folder : str
+        img_file_name : str
+
         """
         # load the band observations
-        file_name = self.get_nircam_img_file_name(band=band)
+        file_name = self.get_nircam_img_file_name(band=band, nircam_data_folder=nircam_data_folder,
+                                                  file_name=img_file_name)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name, hdu_number='SCI')
         pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
@@ -255,7 +294,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                            '%s_wcs_err' % band: selected_wcs, '%s_unit_err' % band: flux_unit,
                                            '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
-    def load_miri_band(self, band, load_err=True, flux_unit='Jy'):
+    def load_miri_band(self, band, load_err=True, flux_unit='Jy', miri_data_folder=None, img_file_name=None,
+                       err_file_name=None):
         """
 
         Parameters
@@ -263,9 +303,12 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         band : str
         load_err : bool
         flux_unit : str
+        miri_data_folder : str
+        img_file_name : str
+        err_file_name : str
         """
         # load the band observations
-        file_name = self.get_miri_img_file_name(band=band)
+        file_name = self.get_miri_img_file_name(band=band, miri_data_folder=miri_data_folder, file_name=img_file_name)
         img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name)
         pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
@@ -286,21 +329,26 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                      '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
                                      '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
-            err_file_name = self.get_miri_err_file_name(band=band)
+            err_file_name = self.get_miri_err_file_name(band=band, miri_data_folder=miri_data_folder,
+                                                        file_name=err_file_name)
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
             err_data *= conversion_factor
             self.miri_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
                                          '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
                                          '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
-    def load_hst_nircam_miri_bands(self, band_list=None, flux_unit='Jy'):
+    def load_hst_nircam_miri_bands(self, band_list=None,  flux_unit='Jy', folder_name_list=None,
+                                   img_file_name_list=None, err_file_name_list=None):
         """
         wrapper to load all available HST, NIRCAM and MIRI observations into the constructor
 
         Parameters
         ----------
-        band_list : list
+        band_list : list or str
         flux_unit : str
+        folder_name_list : list
+        img_file_name_list : list
+        err_file_name_list : list
         """
         # geta list with all observed bands in order of wavelength
         if band_list is None:
@@ -315,28 +363,38 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             for band in self.miri_bands:
                 if band in self.miri_targets[self.target_name]['observed_bands']:
                     band_list.append(band)
+            # sort band list with increasing wavelength
+            band_list = self.sort_band_list(band_list=band_list)
+        elif isinstance(band_list, str):
+            band_list = [band_list]
 
-        # sort band list with increasing wavelength
-        band_list = self.sort_band_list(band_list=band_list)
-        for band in band_list:
+        if folder_name_list is None:
+            folder_name_list = [None] * len(band_list)
+        elif isinstance(folder_name_list, str):
+            folder_name_list = [folder_name_list]
+        if img_file_name_list is None:
+            img_file_name_list = [None] * len(band_list)
+        elif isinstance(img_file_name_list, str):
+            img_file_name_list = [img_file_name_list]
+        if err_file_name_list is None:
+            err_file_name_list = [None] * len(band_list)
+        elif isinstance(err_file_name_list, str):
+            err_file_name_list = [err_file_name_list]
+
+        # load bands
+        for band, folder_name, img_file_name, err_file_name in zip(band_list, folder_name_list, img_file_name_list,
+                                                                   err_file_name_list):
             if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
-                self.load_hst_band(band=band, flux_unit=flux_unit)
+                self.load_hst_band(band=band, flux_unit=flux_unit, hst_data_folder=folder_name,
+                                   img_file_name=img_file_name, err_file_name=err_file_name)
             elif band in self.nircam_bands:
-                self.load_nircam_band(band=band, flux_unit=flux_unit)
+                self.load_nircam_band(band=band, flux_unit=flux_unit, nircam_data_folder=folder_name,
+                                      img_file_name=img_file_name)
             elif band in self.miri_bands:
-                self.load_miri_band(band=band, flux_unit=flux_unit)
+                self.load_miri_band(band=band, flux_unit=flux_unit, miri_data_folder=folder_name,
+                                    img_file_name=img_file_name, err_file_name=err_file_name)
             else:
                 raise KeyError('Band is not found in possible band lists')
-
-        # for hst_band in self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands:
-        #     if hst_band in band_list:
-        #         self.load_hst_band(band=hst_band, flux_unit=flux_unit)
-        # for nircam_band in self.nircam_bands:
-        #     if nircam_band in band_list:
-        #         self.load_nircam_band(band=nircam_band, flux_unit=flux_unit)
-        # for miri_band in self.miri_bands:
-        #     if miri_band in band_list:
-        #         self.load_miri_band(band=miri_band, flux_unit=flux_unit)
 
     def change_hst_nircam_miri_band_units(self, band_list=None, new_unit='MJy/sr'):
         """
@@ -577,12 +635,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         for band in band_list:
             wave_list.append(self.get_band_wave(band=band))
 
-        # print(len(band_list))
-        # print(len(wave_list))
-
         # sort wavelength bands
         sort = np.argsort(wave_list)
-        # print(sort)
         return list(np.array(band_list)[sort])
 
     def create_cigale_flux_file(self, file_path, band_list, aperture_dict_list, snr=3, name_list=None,

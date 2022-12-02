@@ -52,13 +52,18 @@ class PlotPhotometry:
         figure = plt.figure(figsize=figsize)
         # arrange axis
         axis_dict = add_axis_hst_nircam_miri_panel(figure=figure, hst_band_list=hst_band_list,
-                                             nircam_band_list=nircam_band_list, miri_band_list=miri_band_list,
-                                             cutout_dict=cutout_dict)
+                                                   nircam_band_list=nircam_band_list, miri_band_list=miri_band_list,
+                                                   cutout_dict=cutout_dict)
 
         for hst_band, index in zip(hst_band_list, range(len(hst_band_list))):
             # plot data
-            axis_dict['ax_%s' % hst_band].imshow(cutout_dict['%s_img_cutout' % hst_band].data,
-                                                 norm=norm_hst, cmap=cmap_hst)
+            if ((not np.isnan(norm_hst.vmin)) and (not np.isnan(norm_hst.vmax)) and
+                    (np.sum(cutout_dict['%s_img_cutout' % hst_band].data) != 0)):
+                axis_dict['ax_%s' % hst_band].imshow(cutout_dict['%s_img_cutout' % hst_band].data,
+                                                     norm=norm_hst, cmap=cmap_hst)
+            else:
+                axis_dict['ax_%s' % hst_band].cla()
+                continue
             # set limits
             set_lim2cutout(ax=axis_dict['ax_%s' % hst_band], cutout=cutout_dict['%s_img_cutout' % hst_band],
                            cutout_pos=cutout_dict['cutout_pos'],
@@ -79,13 +84,21 @@ class PlotPhotometry:
                             fontsize=fontsize, labelsize=fontsize - 1, ra_tick_num=ra_tick_num,
                             dec_tick_num=dec_tick_num)
         # arrange color bar
-        create_cbar(ax_cbar=axis_dict['ax_color_bar_hst'], cmap=cmap_hst, norm=norm_hst, cbar_label=cbar_label,
-                    fontsize=fontsize, ticks=ticks_hst)
-
+        if ((not np.isnan(norm_hst.vmin) and not np.isnan(norm_hst.vmax)) and
+                (norm_hst.vmin != norm_hst.vmax)):
+            create_cbar(ax_cbar=axis_dict['ax_color_bar_hst'], cmap=cmap_hst, norm=norm_hst, cbar_label=cbar_label,
+                        fontsize=fontsize, ticks=ticks_hst)
+        else:
+            axis_dict['ax_color_bar_hst'].cla()
         for nircam_band, index in zip(nircam_band_list, range(len(nircam_band_list))):
             # plot data
-            axis_dict['ax_%s' % nircam_band].imshow(cutout_dict['%s_img_cutout' % nircam_band].data,
-                                                    norm=norm_nircam, cmap=cmap_nircam)
+            if ((not np.isnan(norm_nircam.vmin)) and (not np.isnan(norm_nircam.vmax)) and
+                    (np.sum(cutout_dict['%s_img_cutout' % nircam_band].data) != 0)):
+                axis_dict['ax_%s' % nircam_band].imshow(cutout_dict['%s_img_cutout' % nircam_band].data,
+                                                     norm=norm_nircam, cmap=cmap_nircam)
+            else:
+                axis_dict['ax_%s' % nircam_band].cla()
+                continue
             # set limits
             set_lim2cutout(ax=axis_dict['ax_%s' % nircam_band], cutout=cutout_dict['%s_img_cutout' % nircam_band],
                            cutout_pos=cutout_dict['cutout_pos'],
@@ -106,13 +119,24 @@ class PlotPhotometry:
                             fontsize=fontsize, labelsize=fontsize - 1, ra_tick_num=ra_tick_num,
                             dec_tick_num=dec_tick_num)
         # arrange color bar
-        create_cbar(ax_cbar=axis_dict['ax_color_bar_nircam'], cmap=cmap_nircam, norm=norm_nircam, cbar_label=cbar_label,
-                    fontsize=fontsize, ticks=ticks_nircam)
+        if ((not np.isnan(norm_nircam.vmin) and not np.isnan(norm_nircam.vmax)) and
+                (norm_nircam.vmin != norm_nircam.vmax)):
+            create_cbar(ax_cbar=axis_dict['ax_color_bar_nircam'], cmap=cmap_nircam, norm=norm_nircam, cbar_label=cbar_label,
+                        fontsize=fontsize, ticks=ticks_nircam)
+        else:
+            axis_dict['ax_color_bar_nircam'].cla()
 
         for miri_band, index in zip(miri_band_list, range(len(miri_band_list))):
+
             # plot data
-            axis_dict['ax_%s' % miri_band].imshow(cutout_dict['%s_img_cutout' % miri_band].data,
-                                                  norm=norm_miri, cmap=cmap_miri)
+            if ((not np.isnan(norm_miri.vmin)) and (not np.isnan(norm_miri.vmax)) and
+                    (np.sum(cutout_dict['%s_img_cutout' % miri_band].data) != 0)):
+                axis_dict['ax_%s' % miri_band].imshow(cutout_dict['%s_img_cutout' % miri_band].data,
+                                                      norm=norm_miri, cmap=cmap_miri)
+            else:
+                axis_dict['ax_%s' % miri_band].cla()
+                continue
+
             # set limits
             set_lim2cutout(ax=axis_dict['ax_%s' % miri_band], cutout=cutout_dict['%s_img_cutout' % miri_band],
                            cutout_pos=cutout_dict['cutout_pos'],
@@ -133,8 +157,12 @@ class PlotPhotometry:
                             fontsize=fontsize, labelsize=fontsize - 1, ra_tick_num=ra_tick_num,
                             dec_tick_num=dec_tick_num)
         # arrange color bar
-        create_cbar(ax_cbar=axis_dict['ax_color_bar_miri'], cmap=cmap_miri, norm=norm_miri, cbar_label=cbar_label,
-                    fontsize=fontsize, ticks=ticks_miri)
+        if ((not np.isnan(norm_miri.vmin) and not np.isnan(norm_miri.vmax)) and
+                (norm_miri.vmin != norm_miri.vmax)):
+            create_cbar(ax_cbar=axis_dict['ax_color_bar_miri'], cmap=cmap_miri, norm=norm_miri, cbar_label=cbar_label,
+                        fontsize=fontsize, ticks=ticks_miri)
+        else:
+            axis_dict['ax_color_bar_miri'].cla()
 
         return figure
 
@@ -388,7 +416,8 @@ class PlotPhotometry:
 
     @staticmethod
     def plot_cigale_sed_panel(hst_band_list, nircam_band_list, miri_band_list, cutout_dict, aperture_dict,
-                              cigale_logo_file_name=None, filter_colors=None, fontsize=33, x_axis=True):
+                              cigale_logo_file_name=None, filter_colors=None, fontsize=33, x_axis=True,
+                              title=None):
 
         if filter_colors is None:
             filter_colors = np.array(['k', 'k', 'k', 'k', 'k', 'tab:blue', 'tab:orange', 'tab:green', 'tab:red',
@@ -416,6 +445,12 @@ class PlotPhotometry:
         plot_sed_data_points(ax=ax_sed, band_list=cutout_dict['band_list'], aperture_dict=aperture_dict,
                              color=filter_colors, annotation=None, line_color='k')
 
+        if title is not None:
+            if isinstance(title, str):
+                ax_sed.text(0.25, 0.1, title, fontsize=fontsize-4)
+            elif isinstance(title, list):
+                for title_string, title_index in zip(title[::-1], range(len(title))):
+                    ax_sed.text(0.25, 10**(-len(title) + 1 + title_index*0.6), title_string, fontsize=fontsize-4)
 
         ax_sed.set_ylabel(r'S$_{\nu}$ (mJy)', fontsize=fontsize)
         ax_sed.tick_params(axis='both', which='both', width=4, length=5, direction='in', pad=10, labelsize=fontsize)
@@ -649,8 +684,8 @@ def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
         list_of_stds = [np.nanstd(cutout) for cutout in cutout_list]
         mean, std = (np.nanmean(list_of_means), np.nanstd(list_of_stds))
 
-        vmin = mean - 1 * std
-        vmax = mean + 10 * std
+        vmin = mean - 5 * std
+        vmax = mean + 20 * std
     else:
         vmin, vmax = vmax_vmin[0], vmax_vmin[1]
     if log_scale:
