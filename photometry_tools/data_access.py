@@ -6,6 +6,7 @@ from scipy.constants import c as speed_of_light
 from pathlib import Path
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+from astropy.io import fits
 
 from photometry_tools import basic_attributes, helper_func
 
@@ -30,6 +31,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             Default None. Target name
         """
         super().__init__()
+
+        self.project_path = Path(__file__).parent.parent
 
         self.hst_data_path = Path(hst_data_path)
         self.nircam_data_path = Path(nircam_data_path)
@@ -223,7 +226,6 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             conversion_factor *= 1e3
         elif flux_unit == 'MJy/sr':
             # get the size of one pixel in sr with the factor 1e6 for the conversion of Jy to MJy later
-
             # change to MJy/sr
             conversion_factor /= (pixel_area_size_sr * 1e6)
         else:
@@ -337,8 +339,50 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                          '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
                                          '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
 
+    def load_hst_native_psf(self, band, file_name=None):
+        """
+        function to load native PSFs to into the attributes
+
+        Parameters
+        ----------
+        band : str
+        file_name : str
+        """
+        if file_name is None:
+            if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
+                file_name = self.project_path / Path('data/hst_psf/wfc3/native_psf_wfc3_%s.fits' % band)
+            elif band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
+                file_name = self.project_path / Path('data/hst_psf/acs/native_psf_acs_%s.fits' % band)
+            else:
+                raise KeyError('There is no computed PSF for the filter ', band,
+                               ' You might need to run the script build_psf/build_hst_psf.py '
+                               'in order to compute all PSFs')
+        psf_data = fits.open(file_name)[0].data
+        self.hst_bands_data.update({'native_psf_%s' % band: psf_data})
+
+    def load_jwst_native_psf(self, band, file_name=None):
+        """
+        function to load native PSFs to into the attributes
+
+        Parameters
+        ----------
+        band : str
+        file_name : str
+        """
+        if file_name is None:
+            file_name = self.project_path / Path('data/jwst_psf/native_psf_%s.fits' % band)
+
+        psf_data = fits.open(file_name)[0].data
+        if band in self.nircam_targets[self.target_name]['observed_bands']:
+            self.nircam_bands_data.update({'native_psf_%s' % band: psf_data})
+        elif band in self.miri_targets[self.target_name]['observed_bands']:
+            self.miri_bands_data.update({'native_psf_%s' % band: psf_data})
+        else:
+            raise KeyError('There is no observation for the target ', self.target_name, ' with the filter ', band)
+
     def load_hst_nircam_miri_bands(self, band_list=None,  flux_unit='Jy', folder_name_list=None,
-                                   img_file_name_list=None, err_file_name_list=None):
+                                   img_file_name_list=None, err_file_name_list=None, psf_file_name_list=None,
+                                   load_psf=False):
         """
         wrapper to load all available HST, NIRCAM and MIRI observations into the constructor
 
@@ -380,19 +424,29 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             err_file_name_list = [None] * len(band_list)
         elif isinstance(err_file_name_list, str):
             err_file_name_list = [err_file_name_list]
+        if psf_file_name_list is None:
+            psf_file_name_list = [None] * len(band_list)
 
         # load bands
-        for band, folder_name, img_file_name, err_file_name in zip(band_list, folder_name_list, img_file_name_list,
-                                                                   err_file_name_list):
+        for band, folder_name, img_file_name, err_file_name, psf_file_name in zip(band_list, folder_name_list,
+                                                                                  img_file_name_list,
+                                                                                  err_file_name_list,
+                                                                                  psf_file_name_list):
             if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 self.load_hst_band(band=band, flux_unit=flux_unit, hst_data_folder=folder_name,
                                    img_file_name=img_file_name, err_file_name=err_file_name)
+                if load_psf:
+                    self.load_hst_native_psf(band=band, file_name=psf_file_name)
             elif band in self.nircam_bands:
                 self.load_nircam_band(band=band, flux_unit=flux_unit, nircam_data_folder=folder_name,
                                       img_file_name=img_file_name)
+                if load_psf:
+                    self.load_jwst_native_psf(band=band, file_name=psf_file_name)
             elif band in self.miri_bands:
                 self.load_miri_band(band=band, flux_unit=flux_unit, miri_data_folder=folder_name,
                                     img_file_name=img_file_name, err_file_name=err_file_name)
+                if load_psf:
+                    self.load_jwst_native_psf(band=band, file_name=psf_file_name)
             else:
                 raise KeyError('Band is not found in possible band lists')
 
