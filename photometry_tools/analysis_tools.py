@@ -6,8 +6,11 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 import sep
 
-from photometry_tools import data_access
+from photometry_tools import data_access, helper_func
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+from astropy.table import QTable, hstack
 
 class AnalysisTools(data_access.DataAccess):
     """
@@ -121,7 +124,7 @@ class AnalysisTools(data_access.DataAccess):
         return aperture_band_dict
 
     @staticmethod
-    def sep_peak_detect(data, err, pixel_coordinates, pix_radius):
+    def sep_find_peak_in_rad(data, err, pixel_coordinates, pix_radius):
         """
 
         Parameters
@@ -193,9 +196,9 @@ class AnalysisTools(data_access.DataAccess):
         data = np.array(data.byteswap().newbyteorder(), dtype=float)
 
         # calculate new pos
-        new_pixel_coordinates, source_table = self.sep_peak_detect(data=data, err=bkg.globalrms,
-                                                                   pixel_coordinates=pixel_coordinates,
-                                                                   pix_radius=pix_radius)
+        new_pixel_coordinates, source_table = self.sep_find_peak_in_rad(data=data, err=bkg.globalrms,
+                                                                        pixel_coordinates=pixel_coordinates,
+                                                                        pix_radius=pix_radius)
         new_pos = wcs.pixel_to_world(new_pixel_coordinates[0], new_pixel_coordinates[1])
         return new_pos, source_table
 
@@ -236,3 +239,213 @@ class AnalysisTools(data_access.DataAccess):
                                               err=data_err)
 
         return float(flux), float(flux_err)
+
+    @staticmethod
+    def sep_source_detection(data_sub, rms, psf, wcs, snr=3.0):
+        """
+
+        Parameters
+        ----------
+        data_sub : ``numpy.ndarray``
+            background subtracted image data
+        rms : float or``numpy.ndarray``
+            RMS of the data
+        psf : ``numpy.ndarray``
+        wcs : ``astropy.wcs.WCS´´
+        snr : float
+
+        Returns
+        -------
+        object_table: ``astropy.table.Table``
+        """
+
+        # To get a better detection of crowded sources and blended sources we significantly increase the contrast
+        # We also use a minimum area of 2 because we want to be able to select point sources
+        # We use the convolved mode and provide a psf in order to get a correct source size estimate.
+        sep_table = sep.extract(data=data_sub, thresh=snr, err=rms, filter_kernel=psf, minarea=2, filter_type='conv',
+                                deblend_cont=0.00001)
+
+        wcs_position = wcs.pixel_to_world(sep_table['x'], sep_table['y'])
+        a = (wcs.pixel_to_world(sep_table['x'], sep_table['y']).ra -
+             wcs.pixel_to_world(sep_table['x'] + sep_table['a'], sep_table['y']).ra)
+        b = (wcs.pixel_to_world(sep_table['x'], sep_table['y']).dec -
+             wcs.pixel_to_world(sep_table['x'], sep_table['y'] + sep_table['b']).dec)
+
+        source_table = QTable([wcs_position.ra, wcs_position.dec, a, b, sep_table['theta']],
+                              names=('ra', 'dec', 'a', 'b', 'theta'))
+        return source_table
+
+    def fit_n_gaussian_to_img(self, band, img, img_err, source_table, wcs):
+        """
+
+        Parameters
+        ----------
+        band : str
+        img : ``numpy.ndarray``
+        img_err : ``numpy.ndarray``
+        source_table : ``astropy.table.Table``, dict or array
+        wcs : ``astropy.wcs.WCS``
+
+        Returns
+        -------
+        fit_results : ``lmfit.model.ModelResult``
+        """
+
+        # create x and y data grid for modelling
+        x_grid, y_grid = helper_func.create_2d_data_mesh(data=img)
+
+        # make sure that the gaussian fitting function is an attribute otherwise load it into the attributes
+        if not hasattr(self, 'gauss2d_rot_conv_%s' % band):
+            self.add_gaussian_model_band_conv(band=band)
+
+        # create the fitting model
+        fmodel = helper_func.compose_n_func_model(func=getattr(self, 'gauss2d_rot_conv_%s' % band), n=len(source_table),
+                                                  running_prefix='g_', independent_vars=('x', 'y'))
+        # print("lmfit parameter names:", fmodel.param_names)
+
+        # get data parameters to get the image parameters
+        img_mean, img_std, img_max = np.mean(img), np.std(img), np.max(img)
+        params = helper_func.set_2d_gauss_params(fmodel=fmodel, initial_params=source_table, wcs=wcs, img_mean=img_mean,
+                                                 img_std=img_std, img_max=img_max, running_prefix='g_')
+        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err) #, method='least_squares')
+        return fit_result
+
+    def compute_de_convolved_gaussian_model(self, fit_result):
+        # create x and y data grid for modelling
+        x_grid, y_grid = helper_func.create_2d_data_mesh(data=fit_result.data)
+
+        number_gaussians = int(len(fit_result.init_params) / 6)
+        print('number_gaussians ', number_gaussians)
+        if number_gaussians == 0:
+            return None
+
+        if 'null_func_amp' in fit_result.params:
+            number_gaussians -= 1
+        print('number_gaussians ', number_gaussians)
+        model_data = self.gauss2d_rot(x=x_grid, y=y_grid,
+                                      amp=fit_result.best_values['g_0_amp'],
+                                      x0=fit_result.best_values['g_0_x0'],
+                                      y0=fit_result.best_values['g_0_y0'],
+                                      sig_x=fit_result.best_values['g_0_sig_x'],
+                                      sig_y=fit_result.best_values['g_0_sig_y'],
+                                      theta=fit_result.best_values['g_0_theta'])
+        for index in range(1, number_gaussians):
+            model_data += self.gauss2d_rot(x=x_grid, y=y_grid,
+                                           amp=fit_result.best_values['g_%i_amp' % index],
+                                           x0=fit_result.best_values['g_%i_x0' % index],
+                                           y0=fit_result.best_values['g_%i_y0' % index],
+                                           sig_x=fit_result.best_values['g_%i_sig_x' % index],
+                                           sig_y=fit_result.best_values['g_%i_sig_y' % index],
+                                           theta=fit_result.best_values['g_%i_theta' % index])
+
+        return model_data
+
+    def compute_flux_gaussian_component(self, fit_result):
+
+        print(fit_result.best_values['g_0_amp'])
+        print(fit_result.params['g_0_amp'])
+        print(fit_result.params['g_0_amp'].value)
+        print(fit_result.params['g_0_amp'].stderr)
+
+        flux = (2 * np.pi * fit_result.params['g_0_amp'].value * fit_result.params['g_0_sig_x'].value *
+                fit_result.params['g_0_sig_y'].value)
+        print(flux)
+        exit()
+        flux_err = flux * np.sqrt(
+            (fit_result.params['g_0_amp'].stderr / fit_result.params['g_0_amp'].value) ** 2 +
+            (fit_result.params['g_0_sig_x'].stderr / fit_result.params['g_0_sig_x'].value) ** 2 +
+            (fit_result.params['g_0_sig_y'].stderr / fit_result.params['g_0_sig_y'].value) ** 2
+        )
+
+    @staticmethod
+    def update_source_table(object_table, object_table_residuals):
+
+        mask_delete_in_object_table = np.zeros(len(object_table), dtype=bool)
+        for index in range(len(object_table)):
+            x_sources = object_table['ra'][index]
+            y_sources = object_table['dec'][index]
+            a_sources = object_table['a'][index]
+            b_sources = object_table['b'][index]
+            angle_sources = object_table['theta'][index]
+
+
+            # problem here !!!!
+            # redo for coordinates
+            objects_in_ell = helper_func.check_point_inside_ellipse(x_ell=x_sources, y_ell=y_sources, a_ell=6*a_sources,
+                                                                    b_ell=6*b_sources, theta_ell=angle_sources,
+                                                                    x_p=object_table_residuals['ra'],
+                                                                    y_p=object_table_residuals['dec'])
+            # find elements where a
+            if sum(objects_in_ell) > 1:
+                mask_delete_in_object_table[index] = True
+        print(len(object_table))
+        object_table = object_table[~mask_delete_in_object_table]
+        print(len(object_table))
+        # object_table = np.insert(object_table, -1, object_table_residuals)
+        object_table = hstack([object_table, object_table_residuals])
+        print(len(object_table))
+        return object_table
+
+    def iterative_gaussian_de_blend(self, band, ra, dec, cutout_size, initial_table=None, n_iterations=2):
+
+        cutout_dict = self.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec, cutout_size=cutout_size, band_list=[band],
+                                                include_err=True)
+
+        # load data, uncertainties and psf
+        data = np.array(cutout_dict['%s_img_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        err = np.array(cutout_dict['%s_err_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        psf = np.array(self.psf_dict['native_psf_%s' % band].byteswap().newbyteorder(), dtype=float)
+        # calculate the background
+        bkg = sep.Background(np.array(data, dtype=float))
+        # data subtracted from a global background estimation
+        data_sub = data - bkg.globalback
+
+        # create SEP object table
+        if initial_table is None:
+            object_table_n1 = self.sep_source_detection(data_sub=data_sub, rms=bkg.globalrms, psf=psf,
+                                                        wcs=cutout_dict['%s_img_cutout' % band].wcs)
+        else:
+            object_table_n1 = initial_table
+
+        # fit a gaussian for each object
+        fit_result_n1 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n1,
+                                                   wcs=cutout_dict['%s_img_cutout' % band].wcs)
+        print(fit_result_n1.fit_report())
+
+        # get de convolved model
+        model_data_n1 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n1)
+
+        # get residuals
+        residuals_n1 = np.array((data_sub - fit_result_n1.best_fit).byteswap().newbyteorder(), dtype=float)
+        bkg_residuals_n1 = sep.Background(np.array(residuals_n1, dtype=float))
+        residuals_sub_n1 = residuals_n1 - bkg_residuals_n1.globalback
+        # get source detection from residuals
+        object_table_residuals_n1 = self.sep_source_detection(data_sub=residuals_sub_n1, rms=bkg_residuals_n1.globalrms,
+                                                              psf=psf, wcs=cutout_dict['%s_img_cutout' % band].wcs)
+
+        # update source table with residual detection
+        object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1)
+
+        # refit data with new table
+        fit_result_n2 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n2,
+                                                   wcs=cutout_dict['%s_img_cutout' % band].wcs)
+        print(fit_result_n2.fit_report())
+
+        model_data_n2 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n2)
+
+        residuals_n2 = np.array((data_sub - fit_result_n2.best_fit).byteswap().newbyteorder(), dtype=float)
+        bkg_residuals_n2 = sep.Background(np.array(residuals_n2, dtype=float))
+        residuals_sub_n2 = residuals_n2 - bkg_residuals_n2.globalback
+
+        # get source detection from residuals
+        object_table_residuals_n2 = self.sep_source_detection(data_sub=residuals_sub_n2, rms=bkg_residuals_n2.globalrms,
+                                                              psf=psf, wcs=cutout_dict['%s_img_cutout' % band].wcs)
+
+        fit_result_dict = {
+            'data_sub': data_sub,
+            'object_table_n1': object_table_n1, 'fit_result_n1': fit_result_n1, 'model_data_n1': model_data_n1,
+            'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1,
+            'object_table_n2': object_table_n2, 'fit_result_n2': fit_result_n2, 'model_data_n2': model_data_n2,
+            'residuals_n2': residuals_n2, 'object_table_residuals_n2': object_table_residuals_n2}
+
+        return fit_result_dict

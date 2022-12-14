@@ -1,6 +1,8 @@
 """
 Classes to gather basic attributes such as folder names, observation statuses or physical constants
 """
+from scipy.signal import fftconvolve
+from numpy import radians, sin, cos, exp
 
 
 class PhangsDataStructure:
@@ -406,6 +408,51 @@ class PhysParams:
             'F2100W': {'ee50': 3.783, 'ee80': 11.497},
             'F2550W': {'ee50': 4.591, 'ee80': 13.919},
         }
+
+
+class FitModels:
+    """
+    Class to gather all needed fitting models
+    """
+    def __init__(self):
+        super().__init__()
+
+        """
+        all functions
+        """
+        self.psf_dict = {}
+
+    def gauss2d_rot(self, x, y, amp, x0, y0, sig_x, sig_y, theta):
+        theta = radians(theta)
+        sigx2 = sig_x**2
+        sigy2 = sig_y**2
+        a = cos(theta)**2/(2*sigx2) + sin(theta)**2/(2*sigy2)
+        b = sin(theta)**2/(2*sigx2) + cos(theta)**2/(2*sigy2)
+        c = sin(2*theta)/(4*sigx2) - sin(2*theta)/(4*sigy2)
+
+        expo = -a*(x-x0)**2 - b*(y-y0)**2 - 2*c*(x-x0)*(y-y0)
+
+        return amp*exp(expo)
+
+    def gauss2d_rot_conv(self, band, x, y, amp, x0, y0, sig_x, sig_y, theta):
+        theta = radians(theta)
+        sigx2 = sig_x**2
+        sigy2 = sig_y**2
+        a = cos(theta)**2/(2*sigx2) + sin(theta)**2/(2*sigy2)
+        b = sin(theta)**2/(2*sigx2) + cos(theta)**2/(2*sigy2)
+        c = sin(2*theta)/(4*sigx2) - sin(2*theta)/(4*sigy2)
+
+        expo = -a*(x-x0)**2 - b*(y-y0)**2 - 2*c*(x-x0)*(y-y0)
+
+        gauss = amp*exp(expo)
+        blurred = fftconvolve(gauss, self.psf_dict['native_psf_%s' % band], mode='same')
+
+        return blurred
+
+    def add_gaussian_model_band_conv(self, band):
+        setattr(
+            self, 'gauss2d_rot_conv_%s' % band, lambda x, y, amp, x0, y0, sig_x, sig_y, theta:
+            self.gauss2d_rot_conv(band=band, x=x, y=y, amp=amp, x0=x0, y0=y0, sig_x=sig_x, sig_y=sig_y, theta=theta))
 
 
 class CigaleModelWrapper:

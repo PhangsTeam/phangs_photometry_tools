@@ -11,7 +11,7 @@ from astropy.io import fits
 from photometry_tools import basic_attributes, helper_func
 
 
-class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysParams):
+class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysParams, basic_attributes.FitModels):
     """
     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
     """
@@ -358,7 +358,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                ' You might need to run the script build_psf/build_hst_psf.py '
                                'in order to compute all PSFs')
         psf_data = fits.open(file_name)[0].data
-        self.hst_bands_data.update({'native_psf_%s' % band: psf_data})
+        self.psf_dict.update({'native_psf_%s' % band: psf_data})
 
     def load_jwst_native_psf(self, band, file_name=None):
         """
@@ -371,14 +371,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         if file_name is None:
             file_name = self.project_path / Path('data/jwst_psf/native_psf_%s.fits' % band)
-
         psf_data = fits.open(file_name)[0].data
-        if band in self.nircam_targets[self.target_name]['observed_bands']:
-            self.nircam_bands_data.update({'native_psf_%s' % band: psf_data})
-        elif band in self.miri_targets[self.target_name]['observed_bands']:
-            self.miri_bands_data.update({'native_psf_%s' % band: psf_data})
-        else:
-            raise KeyError('There is no observation for the target ', self.target_name, ' with the filter ', band)
+        self.psf_dict.update({'native_psf_%s' % band: psf_data})
 
     def load_hst_nircam_miri_bands(self, band_list=None,  flux_unit='Jy', folder_name_list=None,
                                    img_file_name_list=None, err_file_name_list=None, psf_file_name_list=None,
@@ -393,6 +387,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         folder_name_list : list
         img_file_name_list : list
         err_file_name_list : list
+        psf_file_name_list : bool
+        load_psf : bool
         """
         # geta list with all observed bands in order of wavelength
         if band_list is None:
@@ -692,6 +688,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         # sort wavelength bands
         sort = np.argsort(wave_list)
         return list(np.array(band_list)[sort])
+
+
 
     def create_cigale_flux_file(self, file_path, band_list, aperture_dict_list, snr=3, name_list=None,
                                 redshift_list=None, dist_list=None):

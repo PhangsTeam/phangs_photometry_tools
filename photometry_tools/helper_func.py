@@ -10,6 +10,10 @@ from astropy.nddata import Cutout2D
 from astropy.wcs import WCS
 from astropy.io import fits
 import astropy.units as u
+from astropy.coordinates import SkyCoord
+
+from lmfit import Model
+import numpy as np
 
 
 def identify_file_in_folder(folder_path, str_in_file_name):
@@ -165,4 +169,108 @@ def download_file(file_path, url, unpack=False, reload=False):
                         break
                     out.write(data)
             r.release_conn()
+
+
+def compose_n_func_model(func, n, independent_vars=None, running_prefix='g_'):
+
+    if n == 1:
+        return Model(func, prefix='%s0_' % running_prefix, independent_vars=independent_vars)
+    else:
+        fmodel = (Model(func, prefix='%s0_' % running_prefix, independent_vars=independent_vars) +
+                  Model(func, prefix='%s1_' % running_prefix, independent_vars=independent_vars))
+        for double_index in range(0, n-1, 2):
+            if double_index != 0:
+                fmodel += (Model(func, prefix='%s%i_' % (running_prefix, double_index+0), independent_vars=independent_vars) +
+                           Model(func, prefix='%s%i_' % (running_prefix, double_index+1), independent_vars=independent_vars))
+        if n % 2:
+            fmodel += (Model(func, prefix='%s%i_' % (running_prefix, n-1), independent_vars=independent_vars) +
+                       Model(func, prefix='null_func_', independent_vars=independent_vars))
+
+        return fmodel
+
+
+def transform_ellips_world2pix(param_table, wcs):
+    x, y = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'], dec=param_table['dec']))
+
+    points_x_a_low, points_y_a_low = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'], dec=param_table['dec']))
+    points_x_a_high, points_y_a_high = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'] + param_table['a'],
+                                                                   dec=param_table['dec']))
+    a = points_x_a_low - points_x_a_high
+
+    points_x_b_low, points_y_b_low = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'], dec=param_table['dec']))
+    points_x_b_high, points_y_b_high = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'],
+                                                                   dec=param_table['dec'] + param_table['b']))
+    b = points_y_b_low - points_y_b_high
+
+    return x, y, a, b
+
+
+def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max, running_prefix='g_'):
+
+    x, y, a, b = transform_ellips_world2pix(param_table=initial_params, wcs=wcs)
+    theta = initial_params['theta'] * 180. / np.pi
+    theta[theta < 0] += 180
+    theta_min = theta - 1
+    theta_max = theta + 1
+    theta_min[theta_min < 0] = 0
+    theta_max[theta_max > 180] = 180
+
+    params = fmodel.make_params()
+
+    for index in range(len(initial_params)):
+        # it is very important to let the amplitude become extremely large.
+        # If fact due to the PSF convolution this will be smeared out
+        params['%s%i_amp' % (running_prefix, index)].set(value=img_mean, min=0, max=100 * img_max + 100*img_std)
+        params['%s%i_x0' % (running_prefix, index)].set(value=x[index], min=x[index] - 2*a[index],
+                                                        max=x[index] + 2*a[index])
+        params['%s%i_y0' % (running_prefix, index)].set(value=y[index], min=y[index] - 2*b[index],
+                                                        max=y[index] + 2*b[index])
+        params['%s%i_sig_x' % (running_prefix, index)].set(value=a[index], min=0.000001, max=2*a[index])
+        params['%s%i_sig_y' % (running_prefix, index)].set(value=b[index], min=0.000001, max=2*b[index])
+        # params['%s%i_theta' % (running_prefix, index)].set(value=theta[index], min=theta_min[index],
+        #                                                    max=theta_max[index])
+        params['%s%i_theta' % (running_prefix, index)].set(value=0, min=0,
+                                                           max=180)
+
+    if 'null_func_amp' in fmodel.param_names:
+        params['null_func_amp'].set(value=0, vary=False)
+        params['null_func_x0'].set(value=0, vary=False)
+        params['null_func_y0'].set(value=0, vary=False)
+        params['null_func_sig_x'].set(value=0.001, vary=False)
+        params['null_func_sig_y'].set(value=0.001, vary=False)
+        params['null_func_theta'].set(value=0, vary=False)
+
+    return params
+
+
+def create_2d_data_mesh(data):
+    # create x and y data grid
+    x = np.linspace(0, data.shape[0], data.shape[0])
+    y = np.linspace(0, data.shape[1], data.shape[1])
+    x_grid, y_grid = np.meshgrid(x, y)
+    return x_grid, y_grid
+
+
+def check_point_inside_ellipse(x_ell, y_ell, a_ell, b_ell, theta_ell, x_p, y_p):
+    """
+
+    Parameters
+    ----------
+    x_ell, y_ell : float
+        center of ellipse
+    a_ell, b_ell : float
+        the minor and major diameter of the ellipse. NOT THE RADIUS!!!!
+    theta_ell : float
+        rotation angle of ellipse in rad
+    x_p, y_p : float or array
+        position of point you want to check
+
+    Returns
+    -------
+    bool or array of bool
+    """
+    element_1 = ((np.cos(theta_ell)*(x_p - x_ell) + np.sin(theta_ell)*(y_p - y_ell))**2) / ((a_ell/2)**2)
+    element_2 = ((np.sin(theta_ell)*(x_p - x_ell) - np.cos(theta_ell)*(y_p - y_ell))**2) / ((b_ell/2)**2)
+    return (element_1 + element_2) <= 1
+
 

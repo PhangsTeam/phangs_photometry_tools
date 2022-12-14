@@ -469,6 +469,99 @@ class PlotPhotometry:
 
         return figure
 
+    @staticmethod
+    def plot_iter_source_detection(fit_result_dict, band, fontsize=18):
+
+        data_sub = fit_result_dict['data_sub']
+        object_table_n1 = fit_result_dict['object_table_n1']
+        fit_result_n1 = fit_result_dict['fit_result_n1']
+        model_data_n1 = fit_result_dict['model_data_n1']
+        residuals_n1 = fit_result_dict['residuals_n1']
+        object_table_residuals_n1 = fit_result_dict['object_table_residuals_n1']
+        object_table_n2 = fit_result_dict['object_table_n2']
+        fit_result_n2 = fit_result_dict['fit_result_n2']
+        model_data_n2 = fit_result_dict['model_data_n2']
+        residuals_n2 = fit_result_dict['residuals_n2']
+        object_table_residuals_n2 = fit_result_dict['object_table_residuals_n2']
+
+        img_mean, img_std, img_max = np.mean(data_sub), np.std(data_sub), np.max(data_sub)
+
+        # plot results
+        fig, ax = plt.subplots(ncols=4, nrows=2, figsize=(25, 7))
+        # box = (x.min(), x.max(), y.min(), y.max())          # left, right, bottom, top
+        im0 = ax[0, 0].imshow(data_sub, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std, cmap='jet')
+        cbar1 = fig.colorbar(im0, ax=ax[0, 0], fraction=0.046, pad=0.04)
+        im1 = ax[0, 1].imshow(model_data_n1, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std,  cmap='jet')
+        cbar2 = fig.colorbar(im1, ax=ax[0, 1], fraction=0.046, pad=0.04)
+        im2 = ax[0, 2].imshow(fit_result_n1.best_fit, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std,  cmap='jet')
+        cbar3 = fig.colorbar(im2, ax=ax[0, 2], fraction=0.046, pad=0.04)
+        im3 = ax[0, 3].imshow(residuals_n1, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean +img_std,  cmap='jet')
+        cbar4 = fig.colorbar(im3, ax=ax[0, 3], fraction=0.046, pad=0.04)
+
+        ax[0, 0].set_title('Data % s' % band, fontsize=fontsize)
+        ax[0, 1].set_title('Model', fontsize=fontsize)
+        ax[0, 2].set_title('Model convolved', fontsize=fontsize)
+        ax[0, 3].set_title('Residuals', fontsize=fontsize)
+
+        # plot an ellipse for each object
+        for i in range(len(object_table_n1)):
+            e = Ellipse(xy=(object_table_n1['x'][i], object_table_n1['y'][i]),
+                        width=3*object_table_n1['a'][i],
+                        height=3*object_table_n1['b'][i],
+                        angle=object_table_n1['theta'][i] * 180. / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            ax[0, 0].add_artist(e)
+            ax[0, 0].text(object_table_n1['x'][i], object_table_n1['y'][i], i, horizontalalignment='center')
+        # plot an ellipse for each object
+        for i in range(len(object_table_residuals_n1)):
+            e = Ellipse(xy=(object_table_residuals_n1['x'][i], object_table_residuals_n1['y'][i]),
+                        width=3*object_table_residuals_n1['a'][i],
+                        height=3*object_table_residuals_n1['b'][i],
+                        angle=object_table_residuals_n1['theta'][i] * 180. / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            ax[0, 3].add_artist(e)
+
+
+        # box = (x.min(), x.max(), y.min(), y.max())          # left, right, bottom, top
+        im0 = ax[1, 0].imshow(data_sub, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std, cmap='jet')
+        cbar1 = fig.colorbar(im0, ax=ax[1, 0], fraction=0.046, pad=0.04)
+        im1 = ax[1, 1].imshow(model_data_n2, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std,  cmap='jet')
+        cbar2 = fig.colorbar(im1, ax=ax[1, 1], fraction=0.046, pad=0.04)
+        im2 = ax[1, 2].imshow(fit_result_n2.best_fit, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean + 10*img_std,  cmap='jet')
+        cbar3 = fig.colorbar(im2, ax=ax[1, 2], fraction=0.046, pad=0.04)
+        im3 = ax[1, 3].imshow(residuals_n2, interpolation="none", origin='lower', vmin=img_mean-img_std, vmax=img_mean +img_std,  cmap='jet')
+        cbar4 = fig.colorbar(im3, ax=ax[1, 3], fraction=0.046, pad=0.04)
+        ax[1, 0].set_title('Data %s' % band, fontsize=fontsize)
+        ax[1, 1].set_title('NEW Model', fontsize=fontsize)
+        ax[1, 2].set_title('Model convolved', fontsize=fontsize)
+        ax[1, 3].set_title('Residuals', fontsize=fontsize)
+
+        # plot an ellipse for each object
+        for i in range(len(object_table_n2)):
+            e = Ellipse(xy=(object_table_n2['x'][i], object_table_n2['y'][i]),
+                        width=3*object_table_n2['a'][i],
+                        height=3*object_table_n2['b'][i],
+                        angle=object_table_n2['theta'][i] * 180. / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            ax[1, 0].add_artist(e)
+            ax[1, 0].text(object_table_n2['x'][i], object_table_n2['y'][i], i, horizontalalignment='center')
+        # plt.show()
+        # plot an ellipse for each object
+        for i in range(len(object_table_residuals_n2)):
+            e = Ellipse(xy=(object_table_residuals_n2['x'][i], object_table_residuals_n2['y'][i]),
+                        width=3*object_table_residuals_n2['a'][i],
+                        height=3*object_table_residuals_n2['b'][i],
+                        angle=object_table_residuals_n2['theta'][i] * 180. / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            ax[1, 3].add_artist(e)
+
+        return fig
+
+
 
 def add_axis_hst_nircam_miri_postage(figure, hst_band_list, nircam_band_list, miri_band_list, cutout_dict):
 
