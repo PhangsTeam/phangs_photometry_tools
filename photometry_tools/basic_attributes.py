@@ -449,10 +449,26 @@ class FitModels:
 
         return blurred
 
+    def point_source_conv(self, band, x, y, amp, x0, y0):
+
+        a = 1/(2*0.1**2)
+        b = 1/(2*0.1**2)
+        expo = -a*(x-x0)**2 - b*(y-y0)**2
+        gauss = amp*exp(expo)
+
+        blurred = fftconvolve(gauss, self.psf_dict['native_psf_%s' % band], mode='same')
+
+        return blurred
+
     def add_gaussian_model_band_conv(self, band):
         setattr(
             self, 'gauss2d_rot_conv_%s' % band, lambda x, y, amp, x0, y0, sig_x, sig_y, theta:
             self.gauss2d_rot_conv(band=band, x=x, y=y, amp=amp, x0=x0, y0=y0, sig_x=sig_x, sig_y=sig_y, theta=theta))
+
+    def add_point_source_model_band_conv(self, band):
+        setattr(
+            self, 'point_source_conv_%s' % band, lambda x, y, amp, x0, y0:
+            self.point_source_conv(band=band, x=x, y=y, amp=amp, x0=x0, y0=y0))
 
 
 class CigaleModelWrapper:

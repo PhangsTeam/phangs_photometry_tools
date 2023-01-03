@@ -171,6 +171,10 @@ def download_file(file_path, url, unpack=False, reload=False):
             r.release_conn()
 
 
+def null_func2d(x, y, a):
+    return x*a + y*a
+
+
 def compose_n_func_model(func, n, independent_vars=None, running_prefix='g_'):
 
     if n == 1:
@@ -189,7 +193,36 @@ def compose_n_func_model(func, n, independent_vars=None, running_prefix='g_'):
         return fmodel
 
 
-def transform_ellips_world2pix(param_table, wcs):
+def compose_mixed_func_model(func1, func2, mask_func1, independent_vars=None, running_prefix='g_'):
+
+    if len(mask_func1) == 1:
+        if mask_func1[0]:
+            return Model(func1, prefix='%s0_' % running_prefix, independent_vars=independent_vars)
+        else:
+            return Model(func2, prefix='%s0_' % running_prefix, independent_vars=independent_vars)
+
+    else:
+        func_list = []
+        for bool_index in mask_func1:
+            if bool_index:
+                func_list.append(func1)
+            else:
+                func_list.append(func2)
+
+        fmodel = (Model(func_list[0], prefix='%s0_' % running_prefix, independent_vars=independent_vars) +
+                  Model(func_list[1], prefix='%s1_' % running_prefix, independent_vars=independent_vars))
+        for double_index in range(0, len(mask_func1)-1, 2):
+            if double_index != 0:
+                fmodel += (Model(func_list[double_index+0], prefix='%s%i_' % (running_prefix, double_index+0), independent_vars=independent_vars) +
+                           Model(func_list[double_index+1], prefix='%s%i_' % (running_prefix, double_index+1), independent_vars=independent_vars))
+        if len(mask_func1) % 2:
+            fmodel += (Model(func_list[len(mask_func1)-1], prefix='%s%i_' % (running_prefix, len(mask_func1)-1), independent_vars=independent_vars) +
+                       Model(null_func2d, prefix='null_func_', independent_vars=independent_vars))
+
+        return fmodel
+
+
+def transform_ellipse_world2pix(param_table, wcs):
     x, y = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'], dec=param_table['dec']))
 
     points_x_a_low, points_y_a_low = wcs.world_to_pixel(SkyCoord(ra=param_table['ra'], dec=param_table['dec']))
@@ -205,9 +238,19 @@ def transform_ellips_world2pix(param_table, wcs):
     return x, y, a, b
 
 
+def transform_ellipse_pix2world(param_table, wcs):
+    wcs_position = wcs.pixel_to_world(param_table['x'], param_table['y'])
+    a = (wcs.pixel_to_world(param_table['x'], param_table['y']).ra -
+         wcs.pixel_to_world(param_table['x'] + param_table['a'], param_table['y']).ra)
+    b = (wcs.pixel_to_world(param_table['x'], param_table['y']).dec -
+         wcs.pixel_to_world(param_table['x'], param_table['y'] + param_table['b']).dec)
+
+    return wcs_position.ra, wcs_position.dec, a, b
+
+
 def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max, running_prefix='g_'):
 
-    x, y, a, b = transform_ellips_world2pix(param_table=initial_params, wcs=wcs)
+    x, y, a, b = transform_ellipse_world2pix(param_table=initial_params, wcs=wcs)
     theta = initial_params['theta'] * 180. / np.pi
     theta[theta < 0] += 180
     theta_min = theta - 1
@@ -220,17 +263,16 @@ def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max,
     for index in range(len(initial_params)):
         # it is very important to let the amplitude become extremely large.
         # If fact due to the PSF convolution this will be smeared out
-        params['%s%i_amp' % (running_prefix, index)].set(value=img_mean, min=0, max=100 * img_max + 100*img_std)
+        params['%s%i_amp' % (running_prefix, index)].set(value=img_max/3, min=0, max=1000 * img_max + 100*img_std)
         params['%s%i_x0' % (running_prefix, index)].set(value=x[index], min=x[index] - 2*a[index],
                                                         max=x[index] + 2*a[index])
         params['%s%i_y0' % (running_prefix, index)].set(value=y[index], min=y[index] - 2*b[index],
                                                         max=y[index] + 2*b[index])
-        params['%s%i_sig_x' % (running_prefix, index)].set(value=a[index], min=0.000001, max=2*a[index])
-        params['%s%i_sig_y' % (running_prefix, index)].set(value=b[index], min=0.000001, max=2*b[index])
+        params['%s%i_sig_x' % (running_prefix, index)].set(value=a[index], min=0.01, max=2*a[index])
+        params['%s%i_sig_y' % (running_prefix, index)].set(value=b[index], min=0.01, max=2*b[index])
         # params['%s%i_theta' % (running_prefix, index)].set(value=theta[index], min=theta_min[index],
         #                                                    max=theta_max[index])
-        params['%s%i_theta' % (running_prefix, index)].set(value=0, min=0,
-                                                           max=180)
+        params['%s%i_theta' % (running_prefix, index)].set(value=0, min=0, max=360)
 
     if 'null_func_amp' in fmodel.param_names:
         params['null_func_amp'].set(value=0, vary=False)
@@ -239,6 +281,34 @@ def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max,
         params['null_func_sig_x'].set(value=0.001, vary=False)
         params['null_func_sig_y'].set(value=0.001, vary=False)
         params['null_func_theta'].set(value=0, vary=False)
+
+    return params
+
+
+def set_mixt_model_params(fmodel, init_pos, param_lim, img_mean, img_std, img_max, mask_gauss, running_prefix='g_'):
+
+    init_x, init_y = init_pos
+
+    params = fmodel.make_params()
+
+    lim_x, lim_y = param_lim
+
+    for index in range(len(init_x)):
+        # it is very important to let the amplitude become extremely large.
+        # If fact due to the PSF convolution this will be smeared out
+        params['%s%i_amp' % (running_prefix, index)].set(value=img_max, min=0, max=10000 * img_max + 10000*img_std)
+        params['%s%i_x0' % (running_prefix, index)].set(value=init_x[index], min=init_x[index] - lim_x[index],
+                                                        max=init_x[index] + lim_x[index])
+        params['%s%i_y0' % (running_prefix, index)].set(value=init_y[index], min=init_y[index] - lim_y[index],
+                                                        max=init_y[index] + lim_y[index])
+        if mask_gauss[index]:
+
+            params['%s%i_sig_x' % (running_prefix, index)].set(value=lim_x[index]*0.5, min=0.01, max=2*lim_x[index])
+            params['%s%i_sig_y' % (running_prefix, index)].set(value=lim_y[index]*0.5, min=0.01, max=2*lim_y[index])
+            params['%s%i_theta' % (running_prefix, index)].set(value=0, min=0, max=360)
+
+    if 'null_func_a' in fmodel.param_names:
+        params['null_func_a'].set(value=0, vary=False)
 
     return params
 

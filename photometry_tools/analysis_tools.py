@@ -10,7 +10,8 @@ from photometry_tools import data_access, helper_func
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
-from astropy.table import QTable, hstack
+from astropy.table import QTable, vstack
+
 
 class AnalysisTools(data_access.DataAccess):
     """
@@ -275,6 +276,40 @@ class AnalysisTools(data_access.DataAccess):
                               names=('ra', 'dec', 'a', 'b', 'theta'))
         return source_table
 
+    @staticmethod
+    def get_sep_init_source_guess(data_sub, rms, psf, snr=3.0):
+        """
+
+        Parameters
+        ----------
+        data_sub : ``numpy.ndarray``
+            background subtracted image data
+        rms : float or``numpy.ndarray``
+            RMS of the data
+        psf : ``numpy.ndarray``
+        snr : float
+
+        Returns
+        -------
+        dict of initial guesses in pixel scale
+        position x & y minor and major axis a & b and rotation angle theta
+        """
+
+        # To get a better detection of crowded sources and blended sources we significantly increase the contrast
+        # We also use a minimum area of 2 because we want to be able to select point sources
+        # We use the convolved mode and provide a psf in order to get a correct source size estimate.
+        sep_table = sep.extract(data=data_sub, thresh=snr, err=rms, filter_kernel=psf, minarea=2, filter_type='conv',
+                                deblend_cont=0.00001)
+
+        sep_source_dict = {
+            'x': sep_table['x'],
+            'y': sep_table['y'],
+            'a': sep_table['a'],
+            'b': sep_table['b'],
+            'theta': sep_table['theta']}
+
+        return sep_source_dict
+
     def fit_n_gaussian_to_img(self, band, img, img_err, source_table, wcs):
         """
 
@@ -307,8 +342,61 @@ class AnalysisTools(data_access.DataAccess):
         img_mean, img_std, img_max = np.mean(img), np.std(img), np.max(img)
         params = helper_func.set_2d_gauss_params(fmodel=fmodel, initial_params=source_table, wcs=wcs, img_mean=img_mean,
                                                  img_std=img_std, img_max=img_max, running_prefix='g_')
-        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err) #, method='least_squares')
+        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err, method='least_squares')
         return fit_result
+
+    def fit_composed_model2img(self, band, img, img_err, init_pos, param_lim, mask_gauss=None):
+        """
+
+        Parameters
+        ----------
+        band : str
+        img : ``numpy.ndarray``
+        img_err : ``numpy.ndarray``
+
+        Returns
+        -------
+        fit_results : ``lmfit.model.ModelResult``
+        """
+
+        # create x and y data grid for modelling
+        x_grid, y_grid = helper_func.create_2d_data_mesh(data=img)
+
+        # make sure that the gaussian fitting function is an attribute otherwise load it into the attributes
+        if not hasattr(self, 'gauss2d_rot_conv_%s' % band):
+            self.add_gaussian_model_band_conv(band=band)
+
+        # make sure point source model exists
+        if not hasattr(self, 'point_source_conv_%s' % band):
+            self.add_point_source_model_band_conv(band=band)
+
+        initial_x, initial_y = init_pos
+
+
+        print(len(initial_x))
+        if mask_gauss is None:
+            mask_func1 = np.ones(len(initial_x), dtype=bool)
+        else:
+            mask_func1 = ~mask_gauss
+        mask_gauss = ~mask_func1
+
+        fmodel = helper_func.compose_mixed_func_model(func1=getattr(self, 'point_source_conv_%s' % band),
+                                                      func2=getattr(self, 'gauss2d_rot_conv_%s' % band),
+                                                      mask_func1=mask_func1, independent_vars=('x', 'y'),
+                                                      running_prefix='g_')
+
+        print("lmfit parameter names:", fmodel.param_names)
+
+        # get data parameters to get the image parameters
+        img_mean, img_std, img_max = np.mean(img), np.std(img), np.max(img)
+        params = helper_func.set_mixt_model_params(fmodel=fmodel, init_pos=init_pos, param_lim=param_lim, img_mean=img_mean,
+                                                  img_std=img_std, img_max=img_max, mask_gauss=mask_gauss, running_prefix='g_')
+        print(params)
+
+        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err, method='least_squares')
+
+        return fit_result
+
 
     def compute_de_convolved_gaussian_model(self, fit_result):
         # create x and y data grid for modelling
@@ -340,25 +428,28 @@ class AnalysisTools(data_access.DataAccess):
 
         return model_data
 
-    def compute_flux_gaussian_component(self, fit_result):
+    def compute_flux_gaussian_component(self, fit_result, n_gauss):
 
-        print(fit_result.best_values['g_0_amp'])
-        print(fit_result.params['g_0_amp'])
-        print(fit_result.params['g_0_amp'].value)
-        print(fit_result.params['g_0_amp'].stderr)
+        flux_dict = {}
+        for index in range(n_gauss):
+            flux = (2 * np.pi * fit_result.params['g_%i_amp' % index].value *
+                    fit_result.params['g_%i_sig_x' %index].value *
+                    fit_result.params['g_%i_sig_y' %index].value)
 
-        flux = (2 * np.pi * fit_result.params['g_0_amp'].value * fit_result.params['g_0_sig_x'].value *
-                fit_result.params['g_0_sig_y'].value)
-        print(flux)
-        exit()
-        flux_err = flux * np.sqrt(
-            (fit_result.params['g_0_amp'].stderr / fit_result.params['g_0_amp'].value) ** 2 +
-            (fit_result.params['g_0_sig_x'].stderr / fit_result.params['g_0_sig_x'].value) ** 2 +
-            (fit_result.params['g_0_sig_y'].stderr / fit_result.params['g_0_sig_y'].value) ** 2
-        )
+            if fit_result.params['g_%i_amp' % index].stderr is None:
+                flux_err = -999
+            else:
+                flux_err = flux * np.sqrt((fit_result.params['g_%i_amp' % index].stderr /
+                                           fit_result.params['g_%i_amp' % index].value) ** 2 +
+                                          (fit_result.params['g_%i_sig_x' % index].stderr /
+                                           fit_result.params['g_%i_sig_x' % index].value) ** 2 +
+                                          (fit_result.params['g_%i_sig_y' % index].stderr /
+                                           fit_result.params['g_%i_sig_y' % index].value) ** 2)
+            flux_dict.update({'flux_%i' % index: flux, 'flux_err_%i' % index: flux_err})
+        return flux_dict
 
     @staticmethod
-    def update_source_table(object_table, object_table_residuals):
+    def update_source_table(object_table, object_table_residuals, fit_results, rms):
 
         mask_delete_in_object_table = np.zeros(len(object_table), dtype=bool)
         for index in range(len(object_table)):
@@ -368,9 +459,6 @@ class AnalysisTools(data_access.DataAccess):
             b_sources = object_table['b'][index]
             angle_sources = object_table['theta'][index]
 
-
-            # problem here !!!!
-            # redo for coordinates
             objects_in_ell = helper_func.check_point_inside_ellipse(x_ell=x_sources, y_ell=y_sources, a_ell=6*a_sources,
                                                                     b_ell=6*b_sources, theta_ell=angle_sources,
                                                                     x_p=object_table_residuals['ra'],
@@ -378,12 +466,14 @@ class AnalysisTools(data_access.DataAccess):
             # find elements where a
             if sum(objects_in_ell) > 1:
                 mask_delete_in_object_table[index] = True
-        print(len(object_table))
+
+            if fit_results.params['g_%i_amp' % index].value < 3*rms:
+                mask_delete_in_object_table[index] = True
+
         object_table = object_table[~mask_delete_in_object_table]
-        print(len(object_table))
         # object_table = np.insert(object_table, -1, object_table_residuals)
-        object_table = hstack([object_table, object_table_residuals])
-        print(len(object_table))
+        object_table = vstack([object_table, object_table_residuals])
+
         return object_table
 
     def iterative_gaussian_de_blend(self, band, ra, dec, cutout_size, initial_table=None, n_iterations=2):
@@ -399,21 +489,24 @@ class AnalysisTools(data_access.DataAccess):
         bkg = sep.Background(np.array(data, dtype=float))
         # data subtracted from a global background estimation
         data_sub = data - bkg.globalback
+        # get the WCS
+        wcs = cutout_dict['%s_img_cutout' % band].wcs
 
         # create SEP object table
         if initial_table is None:
             object_table_n1 = self.sep_source_detection(data_sub=data_sub, rms=bkg.globalrms, psf=psf,
-                                                        wcs=cutout_dict['%s_img_cutout' % band].wcs)
+                                                        wcs=wcs)
         else:
             object_table_n1 = initial_table
 
         # fit a gaussian for each object
         fit_result_n1 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n1,
-                                                   wcs=cutout_dict['%s_img_cutout' % band].wcs)
+                                                   wcs=wcs)
         print(fit_result_n1.fit_report())
 
         # get de convolved model
         model_data_n1 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n1)
+        flux_dict_n1 = self.compute_flux_gaussian_component(fit_result=fit_result_n1, n_gauss=len(object_table_n1))
 
         # get residuals
         residuals_n1 = np.array((data_sub - fit_result_n1.best_fit).byteswap().newbyteorder(), dtype=float)
@@ -421,17 +514,25 @@ class AnalysisTools(data_access.DataAccess):
         residuals_sub_n1 = residuals_n1 - bkg_residuals_n1.globalback
         # get source detection from residuals
         object_table_residuals_n1 = self.sep_source_detection(data_sub=residuals_sub_n1, rms=bkg_residuals_n1.globalrms,
-                                                              psf=psf, wcs=cutout_dict['%s_img_cutout' % band].wcs)
+                                                              psf=psf, wcs=wcs)
+
+        fit_result_dict = {
+            'data_sub': data_sub, 'wcs': wcs, 'flux_dict_n1': flux_dict_n1,
+            'object_table_n1': object_table_n1, 'fit_result_n1': fit_result_n1, 'model_data_n1': model_data_n1,
+            'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1}
+
 
         # update source table with residual detection
-        object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1)
+        object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1,
+                                                   fit_results=fit_result_n1, rms=bkg_residuals_n1.globalrms)
 
         # refit data with new table
         fit_result_n2 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n2,
-                                                   wcs=cutout_dict['%s_img_cutout' % band].wcs)
+                                                   wcs=wcs)
         print(fit_result_n2.fit_report())
 
         model_data_n2 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n2)
+        flux_dict_n2 = self.compute_flux_gaussian_component(fit_result=fit_result_n2, n_gauss=len(object_table_n2))
 
         residuals_n2 = np.array((data_sub - fit_result_n2.best_fit).byteswap().newbyteorder(), dtype=float)
         bkg_residuals_n2 = sep.Background(np.array(residuals_n2, dtype=float))
@@ -439,13 +540,134 @@ class AnalysisTools(data_access.DataAccess):
 
         # get source detection from residuals
         object_table_residuals_n2 = self.sep_source_detection(data_sub=residuals_sub_n2, rms=bkg_residuals_n2.globalrms,
-                                                              psf=psf, wcs=cutout_dict['%s_img_cutout' % band].wcs)
+                                                              psf=psf, wcs=wcs)
+
+        fit_result_dict.update({'flux_dict_n2': flux_dict_n2, 'object_table_n2': object_table_n2,
+                                'fit_result_n2': fit_result_n2, 'model_data_n2': model_data_n2,
+                                'residuals_n2': residuals_n2, 'object_table_residuals_n2': object_table_residuals_n2})
+
+        return fit_result_dict
+
+    def de_blend_mixed_model(self, band, ra, dec, cutout_size, ):
+
+        # get cutout
+        cutout_dict = self.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec, cutout_size=cutout_size, band_list=[band],
+                                                include_err=True)
+        # get WCS, data, uncertainties and psf
+        data = np.array(cutout_dict['%s_img_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        err = np.array(cutout_dict['%s_err_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        psf = np.array(self.psf_dict['native_psf_%s' % band].byteswap().newbyteorder(), dtype=float)
+        # calculate the background
+        bkg = sep.Background(np.array(data, dtype=float))
+        # data subtracted from a global background estimation
+        data_sub = data - bkg.globalback
+        # get the WCS
+        wcs = cutout_dict['%s_img_cutout' % band].wcs
+
+
+        # create SEP object table
+        sep_source_dict = self.get_sep_init_source_guess(data_sub=data_sub, rms=bkg.globalrms, psf=psf)
+
+        print(sep_source_dict['a'])
+        print(sep_source_dict['b'])
+
+        param_lim = (np.ones(len(sep_source_dict['a'])) * 3, np.ones(len(sep_source_dict['b'])) * 3)
+
+        if not hasattr(self, 'point_source_conv_%s' % band):
+            self.add_point_source_model_band_conv(band=band)
+
+
+        # fit
+        fit_results = self.fit_composed_model2img(band=band, img=data_sub, img_err=err,
+                                                  init_pos=(sep_source_dict['x'], sep_source_dict['y']),
+                                                  param_lim=param_lim, mask_gauss=None)
+
+        print(fit_results.fit_report())
+
+        new_bkg = sep.Background(np.array((data_sub - fit_results.best_fit), dtype=float))
+        new_sep_source_dict = self.get_sep_init_source_guess(data_sub=data_sub - fit_results.best_fit, rms=new_bkg.globalrms, psf=psf)
+
+
+        fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(8, 8))
+
+        ax[0].imshow(data_sub, origin='lower')
+        ax[1].imshow(fit_results.best_fit, origin='lower')
+        ax[2].imshow(data_sub - fit_results.best_fit, origin='lower')
+
+        # print(sep_source_dict)
+
+        for i in range(len(sep_source_dict['x'])):
+            e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
+                width=sep_source_dict['a'][i]*3,
+                height=sep_source_dict['b'][i]*3,
+                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            e.set_linewidth(1)
+            ax[0].add_artist(e)
+
+
+        for i in range(len(new_sep_source_dict['x'])):
+            e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
+                width=new_sep_source_dict['a'][i]*3,
+                height=new_sep_source_dict['b'][i]*3,
+                angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            e.set_linewidth(1)
+            ax[2].add_artist(e)
+
+        plt.show()
+
+
+        exit()
+
+
+        # fit a gaussian for each object
+        fit_result_n1 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n1,
+                                                   wcs=wcs)
+        print(fit_result_n1.fit_report())
+
+        # get de convolved model
+        model_data_n1 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n1)
+        flux_dict_n1 = self.compute_flux_gaussian_component(fit_result=fit_result_n1, n_gauss=len(object_table_n1))
+
+        # get residuals
+        residuals_n1 = np.array((data_sub - fit_result_n1.best_fit).byteswap().newbyteorder(), dtype=float)
+        bkg_residuals_n1 = sep.Background(np.array(residuals_n1, dtype=float))
+        residuals_sub_n1 = residuals_n1 - bkg_residuals_n1.globalback
+        # get source detection from residuals
+        object_table_residuals_n1 = self.sep_source_detection(data_sub=residuals_sub_n1, rms=bkg_residuals_n1.globalrms,
+                                                              psf=psf, wcs=wcs)
 
         fit_result_dict = {
-            'data_sub': data_sub,
+            'data_sub': data_sub, 'wcs': wcs, 'flux_dict_n1': flux_dict_n1,
             'object_table_n1': object_table_n1, 'fit_result_n1': fit_result_n1, 'model_data_n1': model_data_n1,
-            'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1,
-            'object_table_n2': object_table_n2, 'fit_result_n2': fit_result_n2, 'model_data_n2': model_data_n2,
-            'residuals_n2': residuals_n2, 'object_table_residuals_n2': object_table_residuals_n2}
+            'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1}
+
+
+        # update source table with residual detection
+        object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1,
+                                                   fit_results=fit_result_n1, rms=bkg_residuals_n1.globalrms)
+
+        # refit data with new table
+        fit_result_n2 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n2,
+                                                   wcs=wcs)
+        print(fit_result_n2.fit_report())
+
+        model_data_n2 = self.compute_de_convolved_gaussian_model(fit_result=fit_result_n2)
+        flux_dict_n2 = self.compute_flux_gaussian_component(fit_result=fit_result_n2, n_gauss=len(object_table_n2))
+
+        residuals_n2 = np.array((data_sub - fit_result_n2.best_fit).byteswap().newbyteorder(), dtype=float)
+        bkg_residuals_n2 = sep.Background(np.array(residuals_n2, dtype=float))
+        residuals_sub_n2 = residuals_n2 - bkg_residuals_n2.globalback
+
+        # get source detection from residuals
+        object_table_residuals_n2 = self.sep_source_detection(data_sub=residuals_sub_n2, rms=bkg_residuals_n2.globalrms,
+                                                              psf=psf, wcs=wcs)
+
+        fit_result_dict.update({'flux_dict_n2': flux_dict_n2, 'object_table_n2': object_table_n2,
+                                'fit_result_n2': fit_result_n2, 'model_data_n2': model_data_n2,
+                                'residuals_n2': residuals_n2, 'object_table_residuals_n2': object_table_residuals_n2})
 
         return fit_result_dict
