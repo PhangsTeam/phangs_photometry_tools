@@ -62,6 +62,10 @@ for band in cutout_dict['band_list']:
     print(band, ' = %.6f ' % aperture_dict['aperture_dict_%s' % band]['flux'], '+/- ',
           '%.6f mJy' % aperture_dict['aperture_dict_%s' % band]['flux_err'])
 
+print(aperture_dict)
+
+exit()
+
 # for plotting we want to use MJy/sr thus we convert the flux and
 phangs_photometry.change_hst_nircam_miri_band_units(new_unit='MJy/sr')
 

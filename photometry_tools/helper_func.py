@@ -248,6 +248,17 @@ def transform_ellipse_pix2world(param_table, wcs):
     return wcs_position.ra, wcs_position.dec, a, b
 
 
+def transform_pix2world_scale(pixel_length, wcs, dim=0, return_unit='arcsec'):
+
+    if return_unit == 'arcsec':
+        return pixel_length * (wcs.proj_plane_pixel_scales()[dim]).to(u.arcsec).value
+
+
+def transform_world2pix_scale(length_in_arcsec, wcs, dim=0):
+
+    return (length_in_arcsec*u.arcsec).to(u.deg) / wcs.proj_plane_pixel_scales()[dim]
+
+
 def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max, running_prefix='g_'):
 
     x, y, a, b = transform_ellipse_world2pix(param_table=initial_params, wcs=wcs)
@@ -315,8 +326,8 @@ def set_mixt_model_params(fmodel, init_pos, param_lim, img_mean, img_std, img_ma
 
 def create_2d_data_mesh(data):
     # create x and y data grid
-    x = np.linspace(0, data.shape[0], data.shape[0])
-    y = np.linspace(0, data.shape[1], data.shape[1])
+    x = np.linspace(0, data.shape[0]-1, data.shape[0])
+    y = np.linspace(0, data.shape[1]-1, data.shape[1])
     x_grid, y_grid = np.meshgrid(x, y)
     return x_grid, y_grid
 

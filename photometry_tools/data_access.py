@@ -346,7 +346,8 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         Parameters
         ----------
         band : str
-        file_name : str
+        file_name : str or None
+        wcs : Astropy WCS
         """
         if file_name is None:
             if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
@@ -359,6 +360,24 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                'in order to compute all PSFs')
         psf_data = fits.open(file_name)[0].data
         self.psf_dict.update({'native_psf_%s' % band: psf_data})
+
+        wcs = self.hst_bands_data['%s_wcs_img' % band]
+        if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
+            length_in_arcsec = self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee80']*3
+        elif band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
+            length_in_arcsec = self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee80']*3
+        else:
+            raise KeyError('There is no computed PSF for the filter ', band,
+                           ' You might need to run the script build_psf/build_hst_psf.py '
+                           'in order to compute all PSFs')
+        # add small psf
+        small_psf_pix_size = int(helper_func.transform_world2pix_scale(length_in_arcsec=length_in_arcsec, wcs=wcs))
+        cut_border = int((psf_data.shape[0] - small_psf_pix_size)/2)
+        if cut_border < 1:
+            psf_reduced_size = psf_data
+        else:
+            psf_reduced_size = psf_data[cut_border:-cut_border, cut_border:-cut_border]
+        self.small_psf_dict.update({'native_psf_%s' % band: psf_reduced_size})
 
     def load_jwst_native_psf(self, band, file_name=None):
         """
@@ -373,6 +392,24 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             file_name = self.project_path / Path('data/jwst_psf/native_psf_%s.fits' % band)
         psf_data = fits.open(file_name)[0].data
         self.psf_dict.update({'native_psf_%s' % band: psf_data})
+
+        if band in self.nircam_targets[self.target_name]['observed_bands']:
+            wcs = self.nircam_bands_data['%s_wcs_img' % band]
+            length_in_arcsec = self.nircam_encircle_apertures_arcsec[band]['ee80']*3
+        elif band in self.miri_targets[self.target_name]['observed_bands']:
+            wcs = self.miri_bands_data['%s_wcs_img' % band]
+            length_in_arcsec = self.miri_encircle_apertures_arcsec[band]['ee80']*3
+        else:
+            raise KeyError('The band must be observed by NIRCAM or MIRI for this galaxy')
+
+        # add small psf
+        small_psf_pix_size = int(helper_func.transform_world2pix_scale(length_in_arcsec=length_in_arcsec, wcs=wcs))
+        cut_border = int((psf_data.shape[0] - small_psf_pix_size)/2)
+        if cut_border < 1:
+            psf_reduced_size = psf_data
+        else:
+            psf_reduced_size = psf_data[cut_border:-cut_border, cut_border:-cut_border]
+        self.small_psf_dict.update({'native_psf_%s' % band: psf_reduced_size})
 
     def load_hst_nircam_miri_bands(self, band_list=None,  flux_unit='Jy', folder_name_list=None,
                                    img_file_name_list=None, err_file_name_list=None, psf_file_name_list=None,
@@ -433,6 +470,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                    img_file_name=img_file_name, err_file_name=err_file_name)
                 if load_psf:
                     self.load_hst_native_psf(band=band, file_name=psf_file_name)
+
             elif band in self.nircam_bands:
                 self.load_nircam_band(band=band, flux_unit=flux_unit, nircam_data_folder=folder_name,
                                       img_file_name=img_file_name)
