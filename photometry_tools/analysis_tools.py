@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 from astropy.table import QTable, vstack
 
+from astropy.stats import sigma_clipped_stats
+
 import zfit
 import time
 
@@ -280,8 +282,11 @@ class AnalysisTools(data_access.DataAccess):
         return source_table
 
     @staticmethod
-    def get_sep_init_src_guess(data_sub, rms, psf, snr=3.0):
+    def get_sep_init_src_guess(data_sub, rms, psf, snr=3.0, minarea=2, deblend_cont=0.00001):
         """
+        To get a better detection of crowded sources and blended sources we significantly increase the contrast
+        We also use a minimum area of 2 because we want to be able to select point sources
+        We use the convolved mode and provide a psf in order to get a correct source size estimate.
 
         Parameters
         ----------
@@ -291,6 +296,10 @@ class AnalysisTools(data_access.DataAccess):
             RMS of the data
         psf : ``numpy.ndarray``
         snr : float
+        minarea : int
+            minimum area of the sources
+        deblend_cont : float
+            contrast for deblending the source
 
         Returns
         -------
@@ -298,11 +307,8 @@ class AnalysisTools(data_access.DataAccess):
         position x & y minor and major axis a & b and rotation angle theta
         """
 
-        # To get a better detection of crowded sources and blended sources we significantly increase the contrast
-        # We also use a minimum area of 2 because we want to be able to select point sources
-        # We use the convolved mode and provide a psf in order to get a correct source size estimate.
-        sep_table = sep.extract(data=data_sub, thresh=snr, err=rms, filter_kernel=psf, minarea=2, filter_type='conv',
-                                deblend_cont=0.00001)
+        sep_table = sep.extract(data=data_sub, thresh=snr, err=rms, filter_kernel=psf, minarea=minarea,
+                                filter_type='conv', deblend_cont=deblend_cont)
 
         sep_source_dict = {
             'x': sep_table['x'],
@@ -345,7 +351,7 @@ class AnalysisTools(data_access.DataAccess):
         img_mean, img_std, img_max = np.mean(img), np.std(img), np.max(img)
         params = helper_func.set_2d_gauss_params(fmodel=fmodel, initial_params=source_table, wcs=wcs, img_mean=img_mean,
                                                  img_std=img_std, img_max=img_max, running_prefix='g_')
-        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err, method='least_squares')
+        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1 / img_err, method='least_squares')
         return fit_result
 
     def fit_composed_model2img(self, band, img, img_err, init_pos, param_lim, mask_gauss=None):
@@ -375,7 +381,6 @@ class AnalysisTools(data_access.DataAccess):
 
         initial_x, initial_y = init_pos
 
-
         print(len(initial_x))
         if mask_gauss is None:
             mask_func1 = np.ones(len(initial_x), dtype=bool)
@@ -392,11 +397,13 @@ class AnalysisTools(data_access.DataAccess):
 
         # get data parameters to get the image parameters
         img_mean, img_std, img_max = np.mean(img), np.std(img), np.max(img)
-        params = helper_func.set_mixt_model_params(fmodel=fmodel, init_pos=init_pos, param_lim=param_lim, img_mean=img_mean,
-                                                  img_std=img_std, img_max=img_max, mask_gauss=mask_gauss, running_prefix='g_')
+        params = helper_func.set_mixt_model_params(fmodel=fmodel, init_pos=init_pos, param_lim=param_lim,
+                                                   img_mean=img_mean,
+                                                   img_std=img_std, img_max=img_max, mask_gauss=mask_gauss,
+                                                   running_prefix='g_')
         print(params)
 
-        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1/img_err, method='least_squares')
+        fit_result = fmodel.fit(img, x=x_grid, y=y_grid, params=params, weights=1 / img_err, method='least_squares')
 
         return fit_result
 
@@ -435,8 +442,8 @@ class AnalysisTools(data_access.DataAccess):
         flux_dict = {}
         for index in range(n_gauss):
             flux = (2 * np.pi * fit_result.params['g_%i_amp' % index].value *
-                    fit_result.params['g_%i_sig_x' %index].value *
-                    fit_result.params['g_%i_sig_y' %index].value)
+                    fit_result.params['g_%i_sig_x' % index].value *
+                    fit_result.params['g_%i_sig_y' % index].value)
 
             if fit_result.params['g_%i_amp' % index].stderr is None:
                 flux_err = -999
@@ -461,15 +468,16 @@ class AnalysisTools(data_access.DataAccess):
             b_sources = object_table['b'][index]
             angle_sources = object_table['theta'][index]
 
-            objects_in_ell = helper_func.check_point_inside_ellipse(x_ell=x_sources, y_ell=y_sources, a_ell=6*a_sources,
-                                                                    b_ell=6*b_sources, theta_ell=angle_sources,
+            objects_in_ell = helper_func.check_point_inside_ellipse(x_ell=x_sources, y_ell=y_sources,
+                                                                    a_ell=6 * a_sources,
+                                                                    b_ell=6 * b_sources, theta_ell=angle_sources,
                                                                     x_p=object_table_residuals['ra'],
                                                                     y_p=object_table_residuals['dec'])
             # find elements where a
             if sum(objects_in_ell) > 1:
                 mask_delete_in_object_table[index] = True
 
-            if fit_results.params['g_%i_amp' % index].value < 3*rms:
+            if fit_results.params['g_%i_amp' % index].value < 3 * rms:
                 mask_delete_in_object_table[index] = True
 
         object_table = object_table[~mask_delete_in_object_table]
@@ -523,7 +531,6 @@ class AnalysisTools(data_access.DataAccess):
             'object_table_n1': object_table_n1, 'fit_result_n1': fit_result_n1, 'model_data_n1': model_data_n1,
             'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1}
 
-
         # update source table with residual detection
         object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1,
                                                    fit_results=fit_result_n1, rms=bkg_residuals_n1.globalrms)
@@ -566,7 +573,6 @@ class AnalysisTools(data_access.DataAccess):
         # get the WCS
         wcs = cutout_dict['%s_img_cutout' % band].wcs
 
-
         # create SEP object table
         sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub, rms=bkg.globalrms, psf=psf)
 
@@ -578,7 +584,6 @@ class AnalysisTools(data_access.DataAccess):
         if not hasattr(self, 'point_source_conv_%s' % band):
             self.add_point_source_model_band_conv(band=band)
 
-
         # fit
         fit_results = self.fit_composed_model2img(band=band, img=data_sub, img_err=err,
                                                   init_pos=(sep_source_dict['x'], sep_source_dict['y']),
@@ -587,8 +592,8 @@ class AnalysisTools(data_access.DataAccess):
         print(fit_results.fit_report())
 
         new_bkg = sep.Background(np.array((data_sub - fit_results.best_fit), dtype=float))
-        new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_results.best_fit, rms=new_bkg.globalrms, psf=psf)
-
+        new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_results.best_fit,
+                                                          rms=new_bkg.globalrms, psf=psf)
 
         fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(8, 8))
 
@@ -600,20 +605,19 @@ class AnalysisTools(data_access.DataAccess):
 
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
             ax[0].add_artist(e)
 
-
         for i in range(len(new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
-                width=new_sep_source_dict['a'][i]*3,
-                height=new_sep_source_dict['b'][i]*3,
-                angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=new_sep_source_dict['a'][i] * 3,
+                        height=new_sep_source_dict['b'][i] * 3,
+                        angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -621,9 +625,7 @@ class AnalysisTools(data_access.DataAccess):
 
         plt.show()
 
-
         exit()
-
 
         # fit a gaussian for each object
         fit_result_n1 = self.fit_n_gaussian_to_img(band=band, img=data_sub, img_err=err, source_table=object_table_n1,
@@ -646,7 +648,6 @@ class AnalysisTools(data_access.DataAccess):
             'data_sub': data_sub, 'wcs': wcs, 'flux_dict_n1': flux_dict_n1,
             'object_table_n1': object_table_n1, 'fit_result_n1': fit_result_n1, 'model_data_n1': model_data_n1,
             'residuals_n1': residuals_n1, 'object_table_residuals_n1': object_table_residuals_n1}
-
 
         # update source table with residual detection
         object_table_n2 = self.update_source_table(object_table_n1, object_table_residuals_n1,
@@ -674,67 +675,238 @@ class AnalysisTools(data_access.DataAccess):
 
         return fit_result_dict
 
-    def zfit_pnt_src_param_dict_from_src_det(self, x0, y0, a, b, max_data_val, pos_var_fact=3, max_data_fact=1e3,
-                                             starting_index=0):
+    def zfit_pnt_src_param_dict(self, amp, x0, y0, sig, fix,
+                                lower_amp, upper_amp, lower_x0, upper_x0, lower_y0, upper_y0, lower_sig, upper_sig,
+                                starting_index=0, src_name=None, src_blend=None):
+        """
+
+        Parameters
+        ----------
+        amp : float, list or array-like
+        x0 : list or array-like
+        y0 : list or array-like
+        sig : list or array-like
+        fix : bool, list or arry like
+        lower_amp : float, list or array-like
+        upper_amp : float, list or array-like
+        lower_x0 : float, list or array-like
+        upper_x0 : float, list or array-like
+        lower_y0 : float, list or array-like
+        upper_y0 : float, list or array-like
+        lower_sig : float, list or array-like
+        upper_sig : float, list or array-like
+        starting_index : int
+
+        Returns
+        -------
+        dict with all parameter restrictions
+        """
+        # specify number of sources
         param_restrict_dict_pnt = {'n_src_pnt': len(x0)}
+
+        # transform parameters to a list if just a float or int is given
+        if isinstance(amp, float) | isinstance(amp, int):
+            amp = [amp] * len(x0)
+        if isinstance(lower_amp, float) | isinstance(lower_amp, int):
+            lower_amp = [lower_amp] * len(x0)
+        if isinstance(upper_amp, float) | isinstance(upper_amp, int):
+            upper_amp = [upper_amp] * len(x0)
+
+        if isinstance(lower_x0, float) | isinstance(lower_x0, int):
+            lower_x0 = [lower_x0] * len(x0)
+        if isinstance(upper_x0, float) | isinstance(upper_x0, int):
+            upper_x0 = [upper_x0] * len(x0)
+        if isinstance(lower_y0, float) | isinstance(lower_y0, int):
+            lower_y0 = [lower_y0] * len(x0)
+        if isinstance(upper_y0, float) | isinstance(upper_y0, int):
+            upper_y0 = [upper_y0] * len(x0)
+
+        if isinstance(sig, float) | isinstance(sig, int):
+            sig = [sig] * len(x0)
+        if isinstance(lower_sig, float) | isinstance(lower_sig, int):
+            lower_sig = [lower_sig] * len(x0)
+        if isinstance(upper_sig, float) | isinstance(upper_sig, int):
+            upper_sig = [upper_sig] * len(x0)
+
+        if isinstance(fix, bool) | isinstance(fix, int):
+            fix = [fix] * len(x0)
+
+        if src_name is None:
+            src_name = []
+            src_blend = []
+            for index in range(len(x0)):
+                src_name.append(int(index + self.n_total_sources))
+                src_blend.append(None)
+
+        # create parameter restriction dict
         for index in range(len(x0)):
-            max_ext = np.max([a[index], b[index]])
-            param_restrict_dict_pnt.update({'pnt_%i' % (index+starting_index): {
-                'fix': False,
-                'init_amp': max_data_val*5, 'lower_amp': 0, 'upper_amp': max_data_val*max_data_fact,
-                'init_x0': x0[index], 'lower_x0': x0[index]-max_ext*pos_var_fact,
-                'upper_x0': x0[index]+max_ext*pos_var_fact,
-                'init_y0': y0[index], 'lower_y0': y0[index]-max_ext*pos_var_fact,
-                'upper_y0': y0[index]+max_ext*pos_var_fact
+            param_restrict_dict_pnt.update({'pnt_%i' % (index + starting_index): {
+                'fix': fix[index],
+                'init_amp': amp[index], 'lower_amp': lower_amp[index], 'upper_amp': upper_amp[index],
+                'init_x0': x0[index], 'lower_x0': lower_x0[index], 'upper_x0': upper_x0[index],
+                'init_y0': y0[index], 'lower_y0': lower_y0[index], 'upper_y0': upper_y0[index],
+                'init_sig': sig[index], 'lower_sig': lower_sig[index], 'upper_sig': upper_sig[index],
+                'src_name': src_name[index], 'src_blend': src_blend[index]
             }})
+        self.n_total_sources += len(x0)
+
         return param_restrict_dict_pnt
 
-    def zfit_pnt_src_param_dict_from_fit(self, amp, x0, y0, amp_err, x0_err, y0_err, starting_index=0):
+    def zfit_pnt_src_param_dict_from_fit(self, fit_result_dict, mask, fix_mask, starting_index=0):
 
-        param_restrict_dict_pnt = {'n_src_pnt': len(x0)}
+        # specify number of sources
+        param_restrict_dict_pnt = {
+            'n_src_pnt': sum(mask)
+        }
+        for index in range(sum(mask)):
+            param_restrict_dict_pnt.update({'pnt_%i' % (index + starting_index): {
+                'fix': fix_mask[mask][index]}})
+            param_restrict_dict_pnt['pnt_%i' % (index + starting_index)].update({
+                'src_name': fit_result_dict['param_dict_pnt_pix_scale']['src_name_pnt'][mask][index]})
+            param_restrict_dict_pnt['pnt_%i' % (index + starting_index)].update({
+                'src_blend': fit_result_dict['param_dict_pnt_pix_scale']['src_blend_pnt'][mask][index]})
 
-        for index in range(len(x0)):
-            param_restrict_dict_pnt.update({'pnt_%i' % (index+starting_index): {
-                'fix': True,
-                'amp': amp[index],
-                'amp_err': amp_err[index],
-                'x0': x0[index],
-                'x0_err': x0_err[index],
-                'y0': y0[index],
-                'y0_err': y0_err[index]
-            }})
+            for param_name in ['amp', 'x0', 'y0', 'sig']:
+                param_restrict_dict_pnt['pnt_%i' % (index + starting_index)].update({
+                    '%s' % param_name: fit_result_dict['param_dict_pnt_pix_scale']['%s_pnt' % param_name][mask][index],
+                    '%s_err' % param_name: fit_result_dict['param_dict_pnt_pix_scale']['%s_pnt_err' % param_name][mask][index],
+                    'init_%s' % param_name: fit_result_dict['param_dict_pnt_pix_scale']['init_%s_pnt' % param_name][mask][index],
+                    'lower_%s' % param_name: fit_result_dict['param_dict_pnt_pix_scale']['lower_%s_pnt' % param_name][mask][index],
+                    'upper_%s' % param_name: fit_result_dict['param_dict_pnt_pix_scale']['upper_%s_pnt' % param_name][mask][index]})
 
         return param_restrict_dict_pnt
 
-    def zfit_gauss_src_param_dict(self, amp, x0, y0, sig_x, sig_y, theta,
-                                  amp_lim=(0, 1), pos_var=0.5, sig_var=(0.5, 1.5), theta_var=(-np.pi/2, np.pi/2),
-                                  starting_index=0):
+    def zfit_gauss_src_param_dict_from_fit(self, fit_result_dict, fix_mask, starting_index=0):
+
+        # specify number of sources
+        param_restrict_dict_gauss = {
+            'n_src_gauss': len(fit_result_dict['param_dict_gauss_pix_scale']['fix_gauss'])
+        }
+        for index in range(len(fit_result_dict['param_dict_gauss_pix_scale']['fix_gauss'])):
+            param_restrict_dict_gauss.update({'gauss_%i' % (index + starting_index): {
+                'fix': fix_mask[index]}})
+            param_restrict_dict_gauss['gauss_%i' % (index + starting_index)].update({
+                'src_name': fit_result_dict['param_dict_gauss_pix_scale']['src_name_gauss'][index]})
+            param_restrict_dict_gauss['gauss_%i' % (index + starting_index)].update({
+                'src_blend': fit_result_dict['param_dict_gauss_pix_scale']['src_blend_gauss'][index]})
+
+            for param_name in ['amp', 'x0', 'y0', 'sig_x', 'sig_y', 'theta']:
+                param_restrict_dict_gauss['gauss_%i' % (index + starting_index)].update({
+                    '%s' % param_name: fit_result_dict['param_dict_gauss_pix_scale']['%s_gauss' % param_name][index],
+                    '%s_err' % param_name: fit_result_dict['param_dict_gauss_pix_scale']['%s_gauss_err' % param_name][index],
+                    'init_%s' % param_name: fit_result_dict['param_dict_gauss_pix_scale']['init_%s_gauss' % param_name][index],
+                    'lower_%s' % param_name: fit_result_dict['param_dict_gauss_pix_scale']['lower_%s_gauss' % param_name][index],
+                    'upper_%s' % param_name: fit_result_dict['param_dict_gauss_pix_scale']['upper_%s_gauss' % param_name][index]})
+
+        return param_restrict_dict_gauss
+
+    def zfit_gauss_src_param_dict(self, amp, x0, y0, sig_x, sig_y, theta, fix,
+                                  lower_amp, upper_amp, lower_x0, upper_x0, lower_y0, upper_y0,
+                                  lower_sig_x, upper_sig_x, lower_sig_y, upper_sig_y, lower_theta, upper_theta,
+                                  starting_index=0, src_name=None, src_blend=None):
+
         param_restrict_dict_gauss = {'n_src_gauss': len(x0)}
+
+        # transform parameters to a list if just a float or int is given
+        if isinstance(amp, float) | isinstance(amp, int):
+            amp = [amp] * len(x0)
+        if isinstance(lower_amp, float) | isinstance(lower_amp, int):
+            lower_amp = [lower_amp] * len(x0)
+        if isinstance(upper_amp, float) | isinstance(upper_amp, int):
+            upper_amp = [upper_amp] * len(x0)
+
+        if isinstance(lower_x0, float) | isinstance(lower_x0, int):
+            lower_x0 = [lower_x0] * len(x0)
+        if isinstance(upper_x0, float) | isinstance(upper_x0, int):
+            upper_x0 = [upper_x0] * len(x0)
+        if isinstance(lower_y0, float) | isinstance(lower_y0, int):
+            lower_y0 = [lower_y0] * len(x0)
+        if isinstance(upper_y0, float) | isinstance(upper_y0, int):
+            upper_y0 = [upper_y0] * len(x0)
+
+        if isinstance(sig_x, float) | isinstance(sig_x, int):
+            sig_x = [sig_x] * len(x0)
+        if isinstance(sig_y, float) | isinstance(sig_y, int):
+            sig_y = [sig_y] * len(x0)
+
+        if isinstance(lower_sig_x, float) | isinstance(lower_sig_x, int):
+            lower_sig_x = [lower_sig_x] * len(x0)
+        if isinstance(upper_sig_x, float) | isinstance(upper_sig_x, int):
+            upper_sig_x = [upper_sig_x] * len(x0)
+        if isinstance(lower_sig_y, float) | isinstance(lower_sig_y, int):
+            lower_sig_y = [lower_sig_y] * len(x0)
+        if isinstance(upper_sig_y, float) | isinstance(upper_sig_y, int):
+            upper_sig_y = [upper_sig_y] * len(x0)
+
+        if isinstance(theta, float) | isinstance(theta, int):
+            theta = [theta] * len(x0)
+        if isinstance(lower_theta, float) | isinstance(lower_theta, int):
+            lower_theta = [lower_theta] * len(x0)
+        if isinstance(upper_theta, float) | isinstance(upper_theta, int):
+            upper_theta = [upper_theta] * len(x0)
+
+        if isinstance(fix, bool) | isinstance(fix, int):
+            fix = [fix] * len(x0)
+
+        if src_name is None:
+            src_name = []
+            src_blend = []
+            for index in range(len(x0)):
+                src_name.append(int(index + self.n_total_sources))
+                src_blend.append(None)
+
         for index in range(len(x0)):
-            param_restrict_dict_gauss.update({'gauss_%i' % (index+starting_index): {
-                'fix': False,
-                'init_amp': amp[index], 'lower_amp': amp_lim[0], 'upper_amp': amp_lim[1],
-                'init_x0': x0[index], 'lower_x0': x0[index]-pos_var, 'upper_x0': x0[index]+pos_var,
-                'init_y0': y0[index], 'lower_y0': y0[index]-pos_var, 'upper_y0': y0[index]+pos_var,
-                'init_sig_x': sig_x[index], 'lower_sig_x': sig_var[0], 'upper_sig_x': sig_var[1],
-                'init_sig_y': sig_y[index], 'lower_sig_y': sig_var[0], 'upper_sig_y': sig_var[1],
-                'init_theta': theta[index], 'lower_theta': theta_var[0], 'upper_theta': theta_var[1]
+            param_restrict_dict_gauss.update({'gauss_%i' % (index + starting_index): {
+                'fix': fix[index],
+                'init_amp': amp[index], 'lower_amp': lower_amp[index], 'upper_amp': upper_amp[index],
+                'init_x0': x0[index], 'lower_x0': lower_x0[index], 'upper_x0': upper_x0[index],
+                'init_y0': y0[index], 'lower_y0': lower_y0[index], 'upper_y0': upper_y0[index],
+                'init_sig_x': sig_x[index], 'lower_sig_x': lower_sig_x[index], 'upper_sig_x': upper_sig_x[index],
+                'init_sig_y': sig_y[index], 'lower_sig_y': lower_sig_y[index], 'upper_sig_y': upper_sig_y[index],
+                'init_theta': theta[index], 'lower_theta': lower_theta[index], 'upper_theta': upper_theta[index],
+                'src_name': src_name[index], 'src_blend': src_blend[index]
             }})
         return param_restrict_dict_gauss
 
-    def zfit_gauss_src_param_dict_from_fit(self, amp, x0, y0, sig_x, sig_y, theta,
+    def zfit_pnt_src_param_dict_from_fit_old(self, amp, x0, y0, amp_err, x0_err, y0_err, sig, sig_err, src_name, src_blend,
+                                         starting_index=0):
+
+        param_restrict_dict_pnt = {'n_src_pnt': len(x0)}
+
+        for index in range(len(x0)):
+            param_restrict_dict_pnt.update({'pnt_%i' % (index + starting_index): {
+                'fix': True,
+                'init_amp': amp[index],
+                'amp_err': amp_err[index],
+                'init_x0': x0[index],
+                'x0_err': x0_err[index],
+                'init_y0': y0[index],
+                'y0_err': y0_err[index],
+                'init_sig': sig[index],
+                'sig_err': sig_err[index],
+                'src_name': src_name[index],
+                'src_blend': src_blend[index]
+            }})
+
+        return param_restrict_dict_pnt
+
+
+
+    def zfit_gauss_src_param_dict_from_fit_old(self, amp, x0, y0, sig_x, sig_y, theta,
                                            amp_err, x0_err, y0_err, sig_x_err, sig_y_err, theta_err,
+                                           src_name, src_blend,
                                            starting_index=0):
         param_restrict_dict_gauss = {'n_src_gauss': len(x0)}
         for index in range(len(x0)):
-            param_restrict_dict_gauss.update({'gauss_%i' % (index+starting_index): {
+            param_restrict_dict_gauss.update({'gauss_%i' % (index + starting_index): {
                 'fix': True,
-                'amp': amp[index], 'amp_err': amp_err[index],
-                'x0': x0[index], 'x0_err': x0_err[index],
-                'y0': y0[index], 'y0_err': y0_err[index],
-                'sig_x': sig_x[index], 'sig_x_err': sig_x_err[index],
-                'sig_y': sig_y[index], 'sig_y_err': sig_y_err[index],
-                'theta': theta[index], 'theta_err': theta_err[index]
+                'init_amp': amp[index], 'amp_err': amp_err[index],
+                'init_x0': x0[index], 'x0_err': x0_err[index],
+                'init_y0': y0[index], 'y0_err': y0_err[index],
+                'init_sig_x': sig_x[index], 'sig_x_err': sig_x_err[index],
+                'init_sig_y': sig_y[index], 'sig_y_err': sig_y_err[index],
+                'init_theta': theta[index], 'theta_err': theta_err[index],
+                'src_name': src_name[index], 'src_blend': src_blend[index]
             }})
         return param_restrict_dict_gauss
 
@@ -750,115 +922,284 @@ class AnalysisTools(data_access.DataAccess):
 
         amp_pnt = np.zeros(n_src_pnt)
         amp_pnt_err = np.zeros(n_src_pnt)
+        init_amp_pnt = np.zeros(n_src_pnt)
+        lower_amp_pnt = np.zeros(n_src_pnt)
+        upper_amp_pnt = np.zeros(n_src_pnt)
         x0_pnt = np.zeros(n_src_pnt)
         x0_pnt_err = np.zeros(n_src_pnt)
+        init_x0_pnt = np.zeros(n_src_pnt)
+        lower_x0_pnt = np.zeros(n_src_pnt)
+        upper_x0_pnt = np.zeros(n_src_pnt)
         y0_pnt = np.zeros(n_src_pnt)
         y0_pnt_err = np.zeros(n_src_pnt)
+        init_y0_pnt = np.zeros(n_src_pnt)
+        lower_y0_pnt = np.zeros(n_src_pnt)
+        upper_y0_pnt = np.zeros(n_src_pnt)
+        sig_pnt = np.zeros(n_src_pnt)
+        sig_pnt_err = np.zeros(n_src_pnt)
+        init_sig_pnt = np.zeros(n_src_pnt)
+        lower_sig_pnt = np.zeros(n_src_pnt)
+        upper_sig_pnt = np.zeros(n_src_pnt)
+        src_name_pnt = np.zeros(n_src_pnt, dtype=int)
+        src_blend_pnt = np.zeros(n_src_pnt, dtype=object)
+        fix_pnt = np.zeros(n_src_pnt, dtype=bool)
 
         amp_gauss = np.zeros(n_src_gauss)
         amp_gauss_err = np.zeros(n_src_gauss)
+        init_amp_gauss = np.zeros(n_src_gauss)
+        lower_amp_gauss = np.zeros(n_src_gauss)
+        upper_amp_gauss = np.zeros(n_src_gauss)
         x0_gauss = np.zeros(n_src_gauss)
         x0_gauss_err = np.zeros(n_src_gauss)
+        init_x0_gauss = np.zeros(n_src_gauss)
+        lower_x0_gauss = np.zeros(n_src_gauss)
+        upper_x0_gauss = np.zeros(n_src_gauss)
         y0_gauss = np.zeros(n_src_gauss)
         y0_gauss_err = np.zeros(n_src_gauss)
+        init_y0_gauss = np.zeros(n_src_gauss)
+        lower_y0_gauss = np.zeros(n_src_gauss)
+        upper_y0_gauss = np.zeros(n_src_gauss)
         sig_x_gauss = np.zeros(n_src_gauss)
         sig_x_gauss_err = np.zeros(n_src_gauss)
+        init_sig_x_gauss = np.zeros(n_src_gauss)
+        lower_sig_x_gauss = np.zeros(n_src_gauss)
+        upper_sig_x_gauss = np.zeros(n_src_gauss)
         sig_y_gauss = np.zeros(n_src_gauss)
         sig_y_gauss_err = np.zeros(n_src_gauss)
+        init_sig_y_gauss = np.zeros(n_src_gauss)
+        lower_sig_y_gauss = np.zeros(n_src_gauss)
+        upper_sig_y_gauss = np.zeros(n_src_gauss)
         theta_gauss = np.zeros(n_src_gauss)
         theta_gauss_err = np.zeros(n_src_gauss)
+        init_theta_gauss = np.zeros(n_src_gauss)
+        lower_theta_gauss = np.zeros(n_src_gauss)
+        upper_theta_gauss = np.zeros(n_src_gauss)
+        src_name_gauss = np.zeros(n_src_gauss, dtype=int)
+        src_blend_gauss = np.zeros(n_src_gauss, dtype=object)
+        fix_gauss = np.zeros(n_src_gauss, dtype=bool)
 
         # get point source parameters
         n_free_param_pnt = 0
         for index in range(n_src_pnt):
             if zfit_param_restrict_dict_pnt['pnt_%i' % index]['fix']:
+                fix_pnt[index] = True
                 amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['amp']
                 amp_pnt_err[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['amp_err']
+                init_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_amp']
+                lower_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_amp']
+                upper_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_amp']
+
                 x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['x0']
                 x0_pnt_err[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['x0_err']
+                init_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_x0']
+                lower_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_x0']
+                upper_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_x0']
+
                 y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['y0']
                 y0_pnt_err[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['y0_err']
+                init_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_y0']
+                lower_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_y0']
+                upper_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_y0']
+
+                sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['sig']
+                sig_pnt_err[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['sig_err']
+                init_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_sig']
+                lower_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_sig']
+                upper_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_sig']
+
+                src_name_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['src_name']
+                src_blend_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['src_blend']
             else:
-                amp_pnt[index] = param_value_array[0 + n_free_param_pnt*3]
-                amp_pnt_err[index] = error_values[0 + n_free_param_pnt*3]['error']
-                x0_pnt[index] = param_value_array[1 + n_free_param_pnt*3]
-                x0_pnt_err[index] = error_values[1 + n_free_param_pnt*3]['error']
-                y0_pnt[index] = param_value_array[2 + n_free_param_pnt*3]
-                y0_pnt_err[index] = error_values[2 + n_free_param_pnt*3]['error']
+                fix_pnt[index] = False
+                amp_pnt[index] = param_value_array[0 + n_free_param_pnt * 4]
+                amp_pnt_err[index] = error_values[0 + n_free_param_pnt * 4]['error']
+                init_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_amp']
+                lower_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_amp']
+                upper_amp_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_amp']
+
+                x0_pnt[index] = param_value_array[1 + n_free_param_pnt * 4]
+                x0_pnt_err[index] = error_values[1 + n_free_param_pnt * 4]['error']
+                init_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_x0']
+                lower_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_x0']
+                upper_x0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_x0']
+
+                y0_pnt[index] = param_value_array[2 + n_free_param_pnt * 4]
+                y0_pnt_err[index] = error_values[2 + n_free_param_pnt * 4]['error']
+                init_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_y0']
+                lower_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_y0']
+                upper_y0_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_y0']
+
+                sig_pnt[index] = param_value_array[3 + n_free_param_pnt * 4]
+                sig_pnt_err[index] = error_values[3 + n_free_param_pnt * 4]['error']
+                init_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_sig']
+                lower_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_sig']
+                upper_sig_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_sig']
+
+                src_name_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['src_name']
+                src_blend_pnt[index] = zfit_param_restrict_dict_pnt['pnt_%i' % index]['src_blend']
                 n_free_param_pnt += 1
 
         n_free_param_gauss = 0
         # get gauss source parameters
         for index in range(n_src_gauss):
             if zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']:
+                fix_gauss[index] = True
                 amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['amp']
                 amp_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['amp_err']
+                init_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_amp']
+                lower_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_amp']
+                upper_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_amp']
+
                 x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['x0']
                 x0_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['x0_err']
+                init_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_x0']
+                lower_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_x0']
+                upper_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_x0']
+
                 y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['y0']
                 y0_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['y0_err']
+                init_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_y0']
+                lower_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_y0']
+                upper_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_y0']
+
                 sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['sig_x']
                 sig_x_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['sig_x_err']
+                init_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_x']
+                lower_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_x']
+                upper_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_x']
+
                 sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['sig_y']
                 sig_y_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['sig_y_err']
+                init_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_y']
+                lower_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_y']
+                upper_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_y']
+
                 theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['theta']
                 theta_gauss_err[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['theta_err']
+                init_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_theta']
+                lower_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_theta']
+                upper_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_theta']
+
+                src_name_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['src_name']
+                src_blend_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['src_blend']
             else:
-                amp_gauss[index] = param_value_array[0 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                amp_gauss_err[index] = error_values[0 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
-                x0_gauss[index] = param_value_array[1 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                x0_gauss_err[index] = error_values[1 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
-                y0_gauss[index] = param_value_array[2 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                y0_gauss_err[index] = error_values[2 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
-                sig_x_gauss[index] = param_value_array[3 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                sig_x_gauss_err[index] = error_values[3 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
-                sig_y_gauss[index] = param_value_array[4 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                sig_y_gauss_err[index] = error_values[4 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
-                theta_gauss[index] = param_value_array[5 + n_free_param_gauss*6 + 3*n_free_param_pnt]
-                theta_gauss_err[index] = error_values[5 + n_free_param_gauss*6 + 3*n_free_param_pnt]['error']
+                fix_gauss[index] = False
+                amp_gauss[index] = param_value_array[0 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                amp_gauss_err[index] = error_values[0 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_amp']
+                lower_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_amp']
+                upper_amp_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_amp']
+                x0_gauss[index] = param_value_array[1 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                x0_gauss_err[index] = error_values[1 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_x0']
+                lower_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_x0']
+                upper_x0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_x0']
+                y0_gauss[index] = param_value_array[2 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                y0_gauss_err[index] = error_values[2 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_y0']
+                lower_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_y0']
+                upper_y0_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_y0']
+                sig_x_gauss[index] = param_value_array[3 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                sig_x_gauss_err[index] = error_values[3 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_x']
+                lower_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_x']
+                upper_sig_x_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_x']
+                sig_y_gauss[index] = param_value_array[4 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                sig_y_gauss_err[index] = error_values[4 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_y']
+                lower_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_y']
+                upper_sig_y_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_y']
+                theta_gauss[index] = param_value_array[5 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]
+                theta_gauss_err[index] = error_values[5 + n_free_param_gauss * 6 + 4 * n_free_param_pnt]['error']
+                init_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_theta']
+                lower_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_theta']
+                upper_theta_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_theta']
+                src_name_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['src_name']
+                src_blend_gauss[index] = zfit_param_restrict_dict_gauss['gauss_%i' % index]['src_blend']
                 n_free_param_gauss += 1
 
         # point source parameters
         param_dict_pnt = {
             'amp_pnt': amp_pnt,
             'amp_pnt_err': amp_pnt_err,
+            'init_amp_pnt': init_amp_pnt,
+            'lower_amp_pnt': lower_amp_pnt,
+            'upper_amp_pnt': upper_amp_pnt,
             'x0_pnt': x0_pnt,
             'x0_pnt_err': x0_pnt_err,
+            'init_x0_pnt': init_x0_pnt,
+            'lower_x0_pnt': lower_x0_pnt,
+            'upper_x0_pnt': upper_x0_pnt,
             'y0_pnt': y0_pnt,
-            'y0_pnt_err': y0_pnt_err
+            'y0_pnt_err': y0_pnt_err,
+            'init_y0_pnt': init_y0_pnt,
+            'lower_y0_pnt': lower_y0_pnt,
+            'upper_y0_pnt': upper_y0_pnt,
+            'sig_pnt': sig_pnt,
+            'sig_pnt_err': sig_pnt_err,
+            'init_sig_pnt': init_sig_pnt,
+            'lower_sig_pnt': lower_sig_pnt,
+            'upper_sig_pnt': upper_sig_pnt,
+            'src_name_pnt': src_name_pnt,
+            'src_blend_pnt': src_blend_pnt,
+            'fix_pnt': fix_pnt
         }
 
         # gaussian parameters
         param_dict_gauss = {
             'amp_gauss': amp_gauss,
             'amp_gauss_err': amp_gauss_err,
+            'init_amp_gauss': init_amp_gauss,
+            'lower_amp_gauss': lower_amp_gauss,
+            'upper_amp_gauss': upper_amp_gauss,
             'x0_gauss': x0_gauss,
             'x0_gauss_err': x0_gauss_err,
+            'init_x0_gauss': init_x0_gauss,
+            'lower_x0_gauss': lower_x0_gauss,
+            'upper_x0_gauss': upper_x0_gauss,
             'y0_gauss': y0_gauss,
             'y0_gauss_err': y0_gauss_err,
+            'init_y0_gauss': init_y0_gauss,
+            'lower_y0_gauss': lower_y0_gauss,
+            'upper_y0_gauss': upper_y0_gauss,
             'sig_x_gauss': sig_x_gauss,
             'sig_x_gauss_err': sig_x_gauss_err,
+            'init_sig_x_gauss': init_sig_x_gauss,
+            'lower_sig_x_gauss': lower_sig_x_gauss,
+            'upper_sig_x_gauss': upper_sig_x_gauss,
             'sig_y_gauss': sig_y_gauss,
             'sig_y_gauss_err': sig_y_gauss_err,
+            'init_sig_y_gauss': init_sig_y_gauss,
+            'lower_sig_y_gauss': lower_sig_y_gauss,
+            'upper_sig_y_gauss': upper_sig_y_gauss,
             'theta_gauss': theta_gauss,
-            'theta_gauss_err': theta_gauss_err
+            'theta_gauss_err': theta_gauss_err,
+            'init_theta_gauss': init_theta_gauss,
+            'lower_theta_gauss': lower_theta_gauss,
+            'upper_theta_gauss': upper_theta_gauss,
+            'src_name_gauss': src_name_gauss,
+            'src_blend_gauss': src_blend_gauss,
+            'fix_gauss': fix_gauss
         }
 
         return param_dict_pnt, param_dict_gauss
 
-    def assemble_zfit_model(self, param_dict_pnt_pix_scale, param_dict_gauss_pix_scale, band):
+    def assemble_zfit_model(self, param_dict_pnt_pix_scale, param_dict_gauss_pix_scale, band, sig_psf):
 
         best_fit = np.zeros(self.current_img_data.shape)
         best_fit_model = np.zeros(self.current_img_data.shape)
 
         for index in range(0, len(param_dict_pnt_pix_scale['amp_pnt'])):
-            best_fit += getattr(self, 'pnt_src_conv_%s' % band)(x=self.current_img_x_grid, y=self.current_img_y_grid,
+            best_fit += getattr(self, 'pnt_src_sig_conv_%s' % band)(x=self.current_img_x_grid, y=self.current_img_y_grid,
                                                                 amp=param_dict_pnt_pix_scale['amp_pnt'][index],
                                                                 x0=param_dict_pnt_pix_scale['x0_pnt'][index],
-                                                                y0=param_dict_pnt_pix_scale['y0_pnt'][index])
+                                                                y0=param_dict_pnt_pix_scale['y0_pnt'][index],
+                                                                sig=param_dict_pnt_pix_scale['sig_pnt'][index])
             best_fit_model += self.pnt_src(x=self.current_img_x_grid, y=self.current_img_y_grid,
-                                           amp=param_dict_pnt_pix_scale['amp_pnt'][index], x0=param_dict_pnt_pix_scale['x0_pnt'][index],
-                                           y0=param_dict_pnt_pix_scale['y0_pnt'][index])
+                                           amp=param_dict_pnt_pix_scale['amp_pnt'][index],
+                                           x0=param_dict_pnt_pix_scale['x0_pnt'][index],
+                                           y0=param_dict_pnt_pix_scale['y0_pnt'][index],
+                                           sig=param_dict_pnt_pix_scale['sig_pnt'][index])
 
         for index in range(0, len(param_dict_gauss_pix_scale['amp_gauss'])):
             best_fit += getattr(self, 'gauss2d_rot_conv_%s' % band)(x=self.current_img_x_grid,
@@ -866,9 +1207,12 @@ class AnalysisTools(data_access.DataAccess):
                                                                     amp=param_dict_gauss_pix_scale['amp_gauss'][index],
                                                                     x0=param_dict_gauss_pix_scale['x0_gauss'][index],
                                                                     y0=param_dict_gauss_pix_scale['y0_gauss'][index],
-                                                                    sig_x=param_dict_gauss_pix_scale['sig_x_gauss'][index],
-                                                                    sig_y=param_dict_gauss_pix_scale['sig_y_gauss'][index],
-                                                                    theta=param_dict_gauss_pix_scale['theta_gauss'][index])
+                                                                    sig_x=param_dict_gauss_pix_scale['sig_x_gauss'][
+                                                                        index],
+                                                                    sig_y=param_dict_gauss_pix_scale['sig_y_gauss'][
+                                                                        index],
+                                                                    theta=param_dict_gauss_pix_scale['theta_gauss'][
+                                                                        index])
             best_fit_model += self.gauss2d_rot(x=self.current_img_x_grid, y=self.current_img_y_grid,
                                                amp=param_dict_gauss_pix_scale['amp_gauss'][index],
                                                x0=param_dict_gauss_pix_scale['x0_gauss'][index],
@@ -885,12 +1229,15 @@ class AnalysisTools(data_access.DataAccess):
         flux_err = np.zeros(len(param_dict_pnt_pix_scale['amp_pnt']))
 
         for index in range(0, len(param_dict_pnt_pix_scale['amp_pnt'])):
-            flux[index] = np.sum(getattr(self, 'pnt_src_conv_%s' % band)(x=self.current_img_x_grid, y=self.current_img_y_grid,
-                                                                amp=param_dict_pnt_pix_scale['amp_pnt'][index],
-                                                                x0=param_dict_pnt_pix_scale['x0_pnt'][index],
-                                                                y0=param_dict_pnt_pix_scale['y0_pnt'][index]))
+            flux[index] = np.sum(
+                getattr(self, 'pnt_src_sig_conv_%s' % band)(x=self.current_img_x_grid, y=self.current_img_y_grid,
+                                                           amp=param_dict_pnt_pix_scale['amp_pnt'][index],
+                                                           x0=param_dict_pnt_pix_scale['x0_pnt'][index],
+                                                           y0=param_dict_pnt_pix_scale['y0_pnt'][index],
+                                                           sig=param_dict_pnt_pix_scale['sig_pnt'][index]))
 
-            flux_err[index] = flux[index] / param_dict_pnt_pix_scale['amp_pnt'][index] * param_dict_pnt_pix_scale['amp_pnt_err'][index]
+            flux_err[index] = flux[index] / param_dict_pnt_pix_scale['amp_pnt'][index] * \
+                              param_dict_pnt_pix_scale['amp_pnt_err'][index]
 
         return flux, flux_err
 
@@ -901,34 +1248,63 @@ class AnalysisTools(data_access.DataAccess):
 
         for index in range(0, len(param_dict_gauss_pix_scale['amp_gauss'])):
             flux[index] = np.sum(getattr(self, 'gauss2d_rot_conv_%s' % band)(x=self.current_img_x_grid,
-                                                                    y=self.current_img_y_grid,
-                                                                    amp=param_dict_gauss_pix_scale['amp_gauss'][index],
-                                                                    x0=param_dict_gauss_pix_scale['x0_gauss'][index],
-                                                                    y0=param_dict_gauss_pix_scale['y0_gauss'][index],
-                                                                    sig_x=param_dict_gauss_pix_scale['sig_x_gauss'][index],
-                                                                    sig_y=param_dict_gauss_pix_scale['sig_y_gauss'][index],
-                                                                    theta=param_dict_gauss_pix_scale['theta_gauss'][index]))
+                                                                             y=self.current_img_y_grid,
+                                                                             amp=
+                                                                             param_dict_gauss_pix_scale['amp_gauss'][
+                                                                                 index],
+                                                                             x0=param_dict_gauss_pix_scale['x0_gauss'][
+                                                                                 index],
+                                                                             y0=param_dict_gauss_pix_scale['y0_gauss'][
+                                                                                 index],
+                                                                             sig_x=
+                                                                             param_dict_gauss_pix_scale['sig_x_gauss'][
+                                                                                 index],
+                                                                             sig_y=
+                                                                             param_dict_gauss_pix_scale['sig_y_gauss'][
+                                                                                 index],
+                                                                             theta=
+                                                                             param_dict_gauss_pix_scale['theta_gauss'][
+                                                                                 index]))
             analytical_flux = (param_dict_gauss_pix_scale['amp_gauss'][index] *
                                param_dict_gauss_pix_scale['sig_x_gauss'][index] *
                                param_dict_gauss_pix_scale['sig_y_gauss'][index] *
                                2 * np.pi)
             analytical_flux_err = (analytical_flux *
                                    np.sqrt((param_dict_gauss_pix_scale['amp_gauss_err'][index] /
-                                            param_dict_gauss_pix_scale['amp_gauss'][index])**2 +
+                                            param_dict_gauss_pix_scale['amp_gauss'][index]) ** 2 +
                                            (param_dict_gauss_pix_scale['sig_x_gauss_err'][index] /
-                                            param_dict_gauss_pix_scale['sig_x_gauss'][index])**2 +
+                                            param_dict_gauss_pix_scale['sig_x_gauss'][index]) ** 2 +
                                            (param_dict_gauss_pix_scale['sig_y_gauss_err'][index] /
-                                            param_dict_gauss_pix_scale['sig_y_gauss'][index])**2))
+                                            param_dict_gauss_pix_scale['sig_y_gauss'][index]) ** 2))
             flux_err[index] = flux[index] / analytical_flux * analytical_flux_err
 
         return flux, flux_err
 
     @staticmethod
-    def eval_zfit_residuals(pnt_src_x, pnt_src_y, new_source_table, dist_to_ellipse, psf_pix_rad):
+    def eval_zfit_residuals(pnt_src_amp, pnt_src_amp_err, pnt_src_x, pnt_src_y, gauss_src_x, gauss_src_y,
+                            new_source_table, dist_to_ellipse, influenz_rad):
 
-        #mask_delete_in_object_table = np.zeros(len(object_table), dtype=bool)
+        # mask_delete_in_object_table = np.zeros(len(object_table), dtype=bool)
         gauss_cand = np.zeros(len(pnt_src_x), dtype=bool)
+        pos_x0_of_gauss_cand = np.zeros(len(pnt_src_x), dtype=float)
+        pos_y0_of_gauss_cand = np.zeros(len(pnt_src_x), dtype=float)
+        dist_to_gauss_cand = np.zeros(len(pnt_src_x), dtype=float)
         new_pnt_src_dict = {'x': [], 'y': [], 'a': [], 'b': []}
+        derop_pnt_src = pnt_src_amp / pnt_src_amp_err < 1.0
+        pnt_src_with_neighbour = np.zeros(len(pnt_src_x), dtype=bool)
+        gauss_src_with_neighbour = np.zeros(len(gauss_src_x), dtype=bool)
+
+        for index in range(len(pnt_src_x)):
+            pnt_dist_to_all_candidates = np.sqrt((pnt_src_x[index] - new_source_table['x']) ** 2 +
+                                                 (pnt_src_y[index] - new_source_table['y']) ** 2)
+            if sum((pnt_dist_to_all_candidates > 0) & (pnt_dist_to_all_candidates < influenz_rad)):
+                pnt_src_with_neighbour[index] = True
+
+        for index in range(len(gauss_src_x)):
+            gauss_dist_to_all_candidates = np.sqrt((gauss_src_x[index] - new_source_table['x']) ** 2 +
+                                                   (gauss_src_y[index] - new_source_table['y']) ** 2)
+            if sum((gauss_dist_to_all_candidates > 0) & (gauss_dist_to_all_candidates < influenz_rad)):
+                gauss_src_with_neighbour[index] = True
 
         for index in range(len(new_source_table['x'])):
             x_sources = new_source_table['x'][index]
@@ -938,94 +1314,225 @@ class AnalysisTools(data_access.DataAccess):
             angle_sources = new_source_table['theta'][index]
 
             objects_in_ell = helper_func.check_point_inside_ellipse(x_ell=x_sources, y_ell=y_sources,
-                                                                    a_ell=dist_to_ellipse*a_sources + psf_pix_rad,
-                                                                    b_ell=dist_to_ellipse*b_sources + psf_pix_rad,
+                                                                    a_ell=dist_to_ellipse * a_sources,
+                                                                    b_ell=dist_to_ellipse * b_sources,
                                                                     theta_ell=angle_sources,
                                                                     x_p=pnt_src_x, y_p=pnt_src_y)
-            # find elements where a
-            if sum(objects_in_ell) >= 1:
+
+            # find elements where just one source matches with a close neighbour
+            if sum(objects_in_ell) == 1:
                 gauss_cand[objects_in_ell] = True
+                # get a guess how extended the source is
+                dist_to_gauss_cand[objects_in_ell] = np.sqrt((pnt_src_x[objects_in_ell] - x_sources)**2 +
+                                                             (pnt_src_y[objects_in_ell] - y_sources)**2)
+                pos_x0_of_gauss_cand[objects_in_ell] = np.mean([pnt_src_x[objects_in_ell], x_sources])
+                pos_y0_of_gauss_cand[objects_in_ell] = np.mean([pnt_src_y[objects_in_ell], y_sources])
+            elif sum(objects_in_ell) > 1:
+                # multiple old point sources are matching with a new source.
+                # we will only take the closest!
+                # index of the closest point
+                dist = np.sqrt((pnt_src_x - x_sources) ** 2 + (pnt_src_y - y_sources) ** 2)
+                index_closest = np.where(dist == np.min(dist))
+
+                gauss_cand[index_closest] = True
+                dist_to_gauss_cand[index_closest] = np.sqrt((pnt_src_x[objects_in_ell] - x_sources)**2 +
+                                                            (pnt_src_y[objects_in_ell] - y_sources)**2)
+                pos_x0_of_gauss_cand[index_closest] = np.mean([pnt_src_x[index_closest], x_sources])
+                pos_y0_of_gauss_cand[index_closest] = np.mean([pnt_src_y[index_closest], y_sources])
+
             else:
                 new_pnt_src_dict['x'].append(x_sources)
                 new_pnt_src_dict['y'].append(y_sources)
                 new_pnt_src_dict['a'].append(a_sources)
                 new_pnt_src_dict['b'].append(b_sources)
 
-        return gauss_cand, new_pnt_src_dict
+        return_dict = {
+            'gauss_cand': gauss_cand,
+            'pos_x0_of_gauss_cand': pos_x0_of_gauss_cand,
+            'pos_y0_of_gauss_cand': pos_y0_of_gauss_cand,
+            'dist_to_gauss_cand': dist_to_gauss_cand,
+            'new_pnt_src_dict': new_pnt_src_dict,
+            'derop_pnt_src': derop_pnt_src,
+            'pnt_src_with_neighbour': pnt_src_with_neighbour,
+            'gauss_src_with_neighbour': gauss_src_with_neighbour
+        }
 
-    def generate_new_init_zfit_model(self, data_sub, psf, fit_result_dict, band, wcs):
+        return return_dict
+
+    def generate_new_init_zfit_model(self, data_sub, psf, fit_result_dict, band, wcs, sig_psf, max_amp_fact, pix_accuracy):
         # if additional iterations will take place:
         # find sources in residuals
         new_bkg = sep.Background(np.array((data_sub - fit_result_dict['best_fit']), dtype=float))
         new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
                                                           rms=new_bkg.globalrms, psf=psf)
-        print(len(new_sep_source_dict))
+        # when no source was detected just decrease the S/N and the minarea
+        if len(new_sep_source_dict['x']) == 0:
+            for snr in [4.5, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0]:
+                new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
+                                                                  rms=new_bkg.globalrms, psf=psf, snr=snr)
+                if len(new_sep_source_dict['x']) != 0:
+                    break
+        if len(new_sep_source_dict['x']) == 0:
+            new_srcs_found = False
+        else:
+            new_srcs_found = True
 
-        psf_pix_rad = helper_func.transform_world2pix_scale(self.nircam_encircle_apertures_arcsec[band]['ee50'],
-                                                            wcs=wcs)
+        psf_pix_rad = helper_func.transform_world2pix_scale(self.nircam_encircle_apertures_arcsec[band]['ee80'], wcs=wcs)
+        print('psf_pix_rad ', psf_pix_rad)
+
         # evaluate residuals
-        gauss_cand, new_pnt_src_dict = self.eval_zfit_residuals(pnt_src_x=fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt'],
-                                                                pnt_src_y=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'],
-                                                                new_source_table=new_sep_source_dict,
-                                                                dist_to_ellipse=10, psf_pix_rad=psf_pix_rad)
-        print('gauss_cand ', gauss_cand)
-        print('new_pnt_src_dict ', new_pnt_src_dict)
+        source_eval_dict = self.eval_zfit_residuals(pnt_src_amp=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt'],
+                                                    pnt_src_amp_err=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt_err'],
+                                                    pnt_src_x=fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt'],
+                                                    pnt_src_y=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'],
+                                                    gauss_src_x=fit_result_dict['param_dict_gauss_pix_scale']['x0_gauss'],
+                                                    gauss_src_y=fit_result_dict['param_dict_gauss_pix_scale']['y0_gauss'],
+                                                    new_source_table=new_sep_source_dict,
+                                                    dist_to_ellipse=6, influenz_rad=psf_pix_rad)
+
+        print('gauss_cand ', source_eval_dict['gauss_cand'])
+        print('new_pnt_src_dict ', source_eval_dict['new_pnt_src_dict'])
+        print('derop_pnt_src ', source_eval_dict['derop_pnt_src'])
+        print('pnt_src_with_neighbour ', source_eval_dict['pnt_src_with_neighbour'])
+        print('gauss_src_with_neighbour ', source_eval_dict['gauss_src_with_neighbour'])
 
         # now add point sources
-        # but only add those point sources which no gaussian candidates
-        zfit_param_restrict_dict_pnt =\
-            self.zfit_pnt_src_param_dict_from_fit(amp=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt'][~gauss_cand],
-                                                  x0=fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt'][~gauss_cand],
-                                                  y0=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'][~gauss_cand],
-                                                  amp_err=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt_err'][~gauss_cand],
-                                                  x0_err=fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt_err'][~gauss_cand],
-                                                  y0_err=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt_err'][~gauss_cand])
-        zfit_param_restrict_dict_gauss =\
-            self.zfit_gauss_src_param_dict_from_fit(amp=fit_result_dict['param_dict_gauss_pix_scale']['amp_gauss'],
-                                                    x0=fit_result_dict['param_dict_gauss_pix_scale']['x0_gauss'],
-                                                    y0=fit_result_dict['param_dict_gauss_pix_scale']['y0_gauss'],
-                                                    sig_x=fit_result_dict['param_dict_gauss_pix_scale']['sig_x_gauss_err'],
-                                                    sig_y=fit_result_dict['param_dict_gauss_pix_scale']['sig_y_gauss_err'],
-                                                    theta=fit_result_dict['param_dict_gauss_pix_scale']['theta_gauss_err'],
-                                                    amp_err=fit_result_dict['param_dict_gauss_pix_scale']['amp_gauss_err'],
-                                                    x0_err=fit_result_dict['param_dict_gauss_pix_scale']['x0_gauss_err'],
-                                                    y0_err=fit_result_dict['param_dict_gauss_pix_scale']['y0_gauss_err'],
-                                                    sig_x_err=fit_result_dict['param_dict_gauss_pix_scale']['sig_x_gauss_err'],
-                                                    sig_y_err=fit_result_dict['param_dict_gauss_pix_scale']['sig_y_gauss_err'],
-                                                    theta_err=fit_result_dict['param_dict_gauss_pix_scale']['theta_gauss_err'])
+        # but only add those point sources which are no gaussian candidates
+        zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict_from_fit(
+            fit_result_dict=fit_result_dict, mask=~source_eval_dict['gauss_cand'],
+            fix_mask=np.invert(source_eval_dict['pnt_src_with_neighbour']))
+        zfit_param_restrict_dict_gauss = self.zfit_gauss_src_param_dict_from_fit(
+            fit_result_dict=fit_result_dict)
+
+        # #add all
+        # zfit_param_restrict_dict_gauss = self.zfit_gauss_src_param_dict(
+        #     amp=fit_result_dict['param_dict_gauss_pix_scale']['amp_gauss'],
+        #     x0=fit_result_dict['param_dict_gauss_pix_scale']['x0_gauss'],
+        #     y0=fit_result_dict['param_dict_gauss_pix_scale']['y0_gauss'],
+        #     sig_x=fit_result_dict['param_dict_gauss_pix_scale']['sig_x_gauss'],
+        #     sig_y=fit_result_dict['param_dict_gauss_pix_scale']['sig_y_gauss'],
+        #     theta=fit_result_dict['param_dict_gauss_pix_scale']['theta_gauss'],
+        #     fix=np.invert(source_eval_dict['gauss_src_with_neighbour']),
+        #     lower_amp=fit_result_dict['param_dict_gauss_pix_scale']['lower_amp_gauss'],
+        #     upper_amp=fit_result_dict['param_dict_gauss_pix_scale']['upper_amp_gauss'],
+        #     lower_x0=fit_result_dict['param_dict_gauss_pix_scale']['lower_x0_gauss'],
+        #     upper_x0=fit_result_dict['param_dict_gauss_pix_scale']['upper_x0_gauss'],
+        #     lower_y0=fit_result_dict['param_dict_gauss_pix_scale']['lower_y0_gauss'],
+        #     upper_y0=fit_result_dict['param_dict_gauss_pix_scale']['upper_y0_gauss'],
+        #     lower_sig_x=fit_result_dict['param_dict_gauss_pix_scale']['lower_sig_x_gauss'],
+        #     upper_sig_x=fit_result_dict['param_dict_gauss_pix_scale']['upper_sig_x_gauss'],
+        #     lower_sig_y=fit_result_dict['param_dict_gauss_pix_scale']['lower_sig_y_gauss'],
+        #     upper_sig_y=fit_result_dict['param_dict_gauss_pix_scale']['upper_sig_y_gauss'],
+        #     lower_theta=fit_result_dict['param_dict_gauss_pix_scale']['lower_theta_gauss'],
+        #     upper_theta=fit_result_dict['param_dict_gauss_pix_scale']['upper_theta_gauss'],
+        #     starting_index=0, src_name=fit_result_dict['param_dict_gauss_pix_scale']['src_name_gauss'],
+        #     src_blend=fit_result_dict['param_dict_gauss_pix_scale']['src_blend_gauss'])
 
         print('zfit_param_restrict_dict_pnt ', zfit_param_restrict_dict_pnt)
         # add new point sources
-
-        new_zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict_from_src_det(x0=new_pnt_src_dict['x'],
-                                                                            y0=new_pnt_src_dict['y'],
-                                                                            a=new_pnt_src_dict['a'],
-                                                                            b=new_pnt_src_dict['b'],
-                                                                            max_data_val=np.max(data_sub),
-                                                                            starting_index=zfit_param_restrict_dict_pnt['n_src_pnt'])
+        new_zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict(
+            amp=np.max(data_sub) * 5, x0=source_eval_dict['new_pnt_src_dict']['x'],
+            y0=source_eval_dict['new_pnt_src_dict']['y'], sig=sig_psf, fix=False,
+            lower_sig=sig_psf/5, upper_sig=sig_psf*5,
+            lower_amp=0, upper_amp=np.max(data_sub) * max_amp_fact,
+            lower_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) -
+                      np.array(source_eval_dict['new_pnt_src_dict']['a'])),
+            upper_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) +
+                      np.array(source_eval_dict['new_pnt_src_dict']['a'])),
+            lower_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) -
+                      np.array(source_eval_dict['new_pnt_src_dict']['a'])),
+            upper_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) +
+                      np.array(source_eval_dict['new_pnt_src_dict']['a'])),
+            starting_index=zfit_param_restrict_dict_pnt['n_src_pnt'])
 
         n_src_pnt = zfit_param_restrict_dict_pnt['n_src_pnt'] + new_zfit_param_restrict_dict_pnt['n_src_pnt']
         zfit_param_restrict_dict_pnt.update(new_zfit_param_restrict_dict_pnt)
         zfit_param_restrict_dict_pnt['n_src_pnt'] = n_src_pnt
         print('zfit_param_restrict_dict_pnt ', zfit_param_restrict_dict_pnt)
-
         print('zfit_param_restrict_dict_gauss ', zfit_param_restrict_dict_gauss)
-        new_zfit_param_restrict_dict_gauss = self.zfit_gauss_src_param_dict(amp=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt'][gauss_cand],
-                                                               x0=fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt'][gauss_cand],
-                                                               y0=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'][gauss_cand],
-                                                               sig_x=np.ones(sum(gauss_cand)),
-                                                               sig_y=np.ones(sum(gauss_cand)),
-                                                               theta=np.zeros(sum(gauss_cand)),
-                                                               amp_lim=(0, np.max(data_sub) * 1e3),
-                                                               pos_var=10,
-                                                               sig_var=(0.5, 5),
-                                                               theta_var=(-np.pi/2, np.pi/2))
+
+
+
+        initial_sig = source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]
+        initial_sig[initial_sig <= sig_psf] = 2*sig_psf
+        initial_sig = sig_psf*0.2
+        upper_sig = source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]
+        upper_sig[upper_sig <= initial_sig] = 4*sig_psf
+
+        new_zfit_param_restrict_dict_gauss = self.zfit_gauss_src_param_dict(
+            amp=fit_result_dict['param_dict_pnt_pix_scale']['amp_pnt'][source_eval_dict['gauss_cand']],
+            x0=source_eval_dict['pos_x0_of_gauss_cand'][source_eval_dict['gauss_cand']],
+            y0=source_eval_dict['pos_y0_of_gauss_cand'][source_eval_dict['gauss_cand']],
+            sig_x=initial_sig,
+            sig_y=initial_sig,
+            fix=False,
+            theta=np.zeros(sum(source_eval_dict['gauss_cand'])),
+            lower_amp=0., upper_amp=np.max(data_sub)*max_amp_fact,
+            lower_x0=(source_eval_dict['pos_x0_of_gauss_cand'][source_eval_dict['gauss_cand']] -
+                      source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]),
+            upper_x0=(source_eval_dict['pos_x0_of_gauss_cand'][source_eval_dict['gauss_cand']] +
+                      source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]),
+            lower_y0=(source_eval_dict['pos_y0_of_gauss_cand'][source_eval_dict['gauss_cand']] -
+                      source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]),
+            upper_y0=(source_eval_dict['pos_y0_of_gauss_cand'][source_eval_dict['gauss_cand']] +
+                      source_eval_dict['dist_to_gauss_cand'][source_eval_dict['gauss_cand']]),
+            lower_sig_x=sig_psf/8, upper_sig_x=upper_sig,
+            lower_sig_y=sig_psf/8, upper_sig_y=upper_sig,
+            lower_theta=-np.pi/2, upper_theta=np.pi/2,
+            src_name=fit_result_dict['param_dict_pnt_pix_scale']['src_name_pnt'][source_eval_dict['gauss_cand']],
+            src_blend=fit_result_dict['param_dict_pnt_pix_scale']['src_blend_pnt'][source_eval_dict['gauss_cand']],
+            starting_index=zfit_param_restrict_dict_gauss['n_src_gauss'])
+
         n_src_gauss = zfit_param_restrict_dict_gauss['n_src_gauss'] + new_zfit_param_restrict_dict_gauss['n_src_gauss']
         zfit_param_restrict_dict_gauss.update(new_zfit_param_restrict_dict_gauss)
         zfit_param_restrict_dict_gauss['n_src_gauss'] = n_src_gauss
         print('zfit_param_restrict_dict_gauss ', zfit_param_restrict_dict_gauss)
 
-        return zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss
+
+        fig, ax = plt.subplots(ncols=4, nrows=1, figsize=(16, 8))
+
+        mean, median, std = sigma_clipped_stats(data_sub, sigma=3.0)
+
+        ax[0].imshow(data_sub, vmin=-std, vmax=20*std, origin='lower')
+        ax[1].imshow(fit_result_dict['best_fit'], vmin=-std, vmax=20*std, origin='lower')
+        ax[2].imshow(fit_result_dict['best_fit_model'], origin='lower')
+        ax[3].imshow(data_sub - fit_result_dict['best_fit'], vmin=-3*std, vmax=3*std, origin='lower')
+
+        ax[0].scatter(fit_result_dict['param_dict_pnt_pix_scale']['x0_pnt'],
+                      fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'], color='b')
+
+        for index_pnt in range(zfit_param_restrict_dict_pnt['n_src_pnt']):
+            x = zfit_param_restrict_dict_pnt['pnt_%i' % index_pnt]['init_x0']
+            y = zfit_param_restrict_dict_pnt['pnt_%i' % index_pnt]['init_y0']
+            ax[0].scatter(x, y, s=8, color='r')
+
+        for index_gauss in range(zfit_param_restrict_dict_gauss['n_src_gauss']):
+            x = zfit_param_restrict_dict_gauss['gauss_%i' % index_gauss]['init_x0']
+            y = zfit_param_restrict_dict_gauss['gauss_%i' % index_gauss]['init_y0']
+            ax[0].scatter(x, y, s=8, color='g')
+
+
+        for i in range(len(new_sep_source_dict['x'])):
+            e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
+                        width=new_sep_source_dict['a'][i] * 3,
+                        height=new_sep_source_dict['b'][i] * 3,
+                        angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+            e.set_facecolor('none')
+            e.set_edgecolor('red')
+            e.set_linewidth(1)
+            ax[0].add_artist(e)
+            ax[0].text(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i], '%i' % i)
+
+        plt.show()
+        plt.clf()
+        plt.close()
+        plt.cla()
+        # fig.savefig('plot_output/test_1/best_fit_%s_%i.png' % (band, fit_iter_index))
+        # fig.clf()
+        # plt.close()
+        # plt.cla()
+
+        return zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss, new_srcs_found
 
     def transform_params_pix2world(self, param_dict_pnt_pix_scale, param_dict_gauss_pix_scale, wcs):
 
@@ -1034,6 +1541,10 @@ class AnalysisTools(data_access.DataAccess):
                                                            wcs=wcs, dim=0, return_unit='arcsec')
         y0_pnt_err = helper_func.transform_pix2world_scale(pixel_length=param_dict_pnt_pix_scale['y0_pnt_err'],
                                                            wcs=wcs, dim=1, return_unit='arcsec')
+        sig_pnt = helper_func.transform_pix2world_scale(pixel_length=param_dict_pnt_pix_scale['sig_pnt'],
+                                                        wcs=wcs, dim=0, return_unit='arcsec')
+        sig_pnt_err = helper_func.transform_pix2world_scale(pixel_length=param_dict_pnt_pix_scale['sig_pnt_err'],
+                                                        wcs=wcs, dim=0, return_unit='arcsec')
 
         position_gauss = wcs.pixel_to_world(param_dict_gauss_pix_scale['x0_gauss'],
                                             param_dict_gauss_pix_scale['y0_gauss'])
@@ -1042,50 +1553,239 @@ class AnalysisTools(data_access.DataAccess):
         y0_gauss_err = helper_func.transform_pix2world_scale(pixel_length=param_dict_gauss_pix_scale['y0_gauss_err'],
                                                              wcs=wcs, dim=1, return_unit='arcsec')
 
-        sigma_x_gauss = helper_func.transform_pix2world_scale(pixel_length=param_dict_gauss_pix_scale['sig_x_gauss'],
-                                                              wcs=wcs, dim=0, return_unit='arcsec')
+        sig_x_gauss = helper_func.transform_pix2world_scale(pixel_length=param_dict_gauss_pix_scale['sig_x_gauss'],
+                                                            wcs=wcs, dim=0, return_unit='arcsec')
         sig_x_gauss_err = helper_func.transform_pix2world_scale(
             pixel_length=param_dict_gauss_pix_scale['sig_x_gauss_err'], wcs=wcs, dim=0, return_unit='arcsec')
-        sigma_y_gauss = helper_func.transform_pix2world_scale(pixel_length=param_dict_gauss_pix_scale['sig_y_gauss'],
-                                                              wcs=wcs, dim=1, return_unit='arcsec')
+        sig_y_gauss = helper_func.transform_pix2world_scale(pixel_length=param_dict_gauss_pix_scale['sig_y_gauss'],
+                                                            wcs=wcs, dim=1, return_unit='arcsec')
         sig_y_gauss_err = helper_func.transform_pix2world_scale(
             pixel_length=param_dict_gauss_pix_scale['sig_y_gauss_err'], wcs=wcs, dim=1, return_unit='arcsec')
 
-        param_dict_pnt_wcs_scale = {'position_pnt': position_pnt,  'x0_pnt_err': x0_pnt_err, 'y0_pnt_err': y0_pnt_err}
+        param_dict_pnt_wcs_scale = {'position_pnt': position_pnt, 'x0_pnt_err': x0_pnt_err, 'y0_pnt_err': y0_pnt_err,
+                                    'sig_pnt': sig_pnt, 'sig_pnt_err': sig_pnt_err}
         param_dict_gauss_wcs_scale = {
             'position_gauss': position_gauss,
-            'sigma_x_gauss': sigma_x_gauss,
-            'sigma_y_gauss': sigma_y_gauss,
+            'sig_x_gauss': sig_x_gauss,
+            'sig_y_gauss': sig_y_gauss,
             'x0_gauss_err': x0_gauss_err,
             'y0_gauss_err': y0_gauss_err,
             'sig_x_gauss_err': sig_x_gauss_err,
             'sig_y_gauss_err': sig_y_gauss_err,
         }
 
-        print('param_dict_pnt_pix_scale[x0_pnt]', param_dict_pnt_pix_scale['x0_pnt'])
-        print('param_dict_pnt_pix_scale[y0_pnt]', param_dict_pnt_pix_scale['y0_pnt'])
-        print('param_dict_gauss_pix_scale[x0_gauss]', param_dict_gauss_pix_scale['x0_gauss'])
-        print('param_dict_gauss_pix_scale[y0_gauss]', param_dict_gauss_pix_scale['y0_gauss'])
-
-        print('position_pnt ', position_pnt)
-        print('position_gauss ', position_gauss)
-        print('sigma_x_gauss ', sigma_x_gauss)
-        print('sigma_y_gauss ', sigma_y_gauss)
-
         return param_dict_pnt_wcs_scale, param_dict_gauss_wcs_scale
 
+    def get_init_guess_from_other_band(self, init_src_dict, wcs, pix_accuracy, data, sig_psf, max_amp_fact):
+
+        self.n_total_sources = init_src_dict['n_total_sources']
+
+        x0_pnt = np.array(wcs.world_to_pixel(init_src_dict['param_dict_pnt_wcs_scale']['position_pnt'])[0], dtype=float)
+        y0_pnt = np.array(wcs.world_to_pixel(init_src_dict['param_dict_pnt_wcs_scale']['position_pnt'])[1], dtype=float)
+        x0_pnt_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_pnt_wcs_scale']['x0_pnt_err'], wcs=wcs, dim=0), dtype=float)
+        y0_pnt_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_pnt_wcs_scale']['y0_pnt_err'], wcs=wcs, dim=1), dtype=float)
+        src_name_pnt = np.array(init_src_dict['param_dict_pnt_pix_scale']['src_name'], dtype=int)
+        src_blend_pnt = np.array(init_src_dict['param_dict_pnt_pix_scale']['src_blend'], dtype=object)
+
+        x0_gauss = np.array(wcs.world_to_pixel(init_src_dict['param_dict_gauss_wcs_scale']['position_gauss'])[0],
+                            dtype=float)
+        y0_gauss = np.array(wcs.world_to_pixel(init_src_dict['param_dict_gauss_wcs_scale']['position_gauss'])[1],
+                            dtype=float)
+        x0_gauss_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['x0_gauss_err'], wcs=wcs, dim=0), dtype=float)
+        y0_gauss_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['y0_gauss_err'], wcs=wcs, dim=1), dtype=float)
+        sig_x_gauss = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['sig_x_gauss'], wcs=wcs, dim=0), dtype=float)
+        sig_y_gauss = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['sig_y_gauss'], wcs=wcs, dim=1), dtype=float)
+        sig_x_gauss_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['sig_x_gauss_err'], wcs=wcs, dim=0),
+            dtype=float)
+        sig_y_gauss_err = np.array(helper_func.transform_world2pix_scale(
+            length_in_arcsec=init_src_dict['param_dict_gauss_wcs_scale']['sig_y_gauss_err'], wcs=wcs, dim=1),
+            dtype=float)
+        theta_gauss = np.array(init_src_dict['param_dict_gauss_pix_scale']['theta_gauss'], dtype=float)
+        src_name_gauss = np.array(init_src_dict['param_dict_gauss_pix_scale']['src_name'], dtype=int)
+        src_blend_gauss = np.array(init_src_dict['param_dict_gauss_pix_scale']['src_blend'], dtype=object)
+
+        print('x0_pnt ', x0_pnt)
+        print('y0_pnt ', y0_pnt)
+        print('x0_pnt_err ', x0_pnt_err)
+        print('y0_pnt_err ', y0_pnt_err)
+        print('src_name_pnt ', src_name_pnt)
+        print('src_blend_pnt ', src_blend_pnt)
+
+        print('x0_gauss ', x0_gauss)
+        print('y0_gauss ', y0_gauss)
+        print('x0_gauss_err ', x0_gauss_err)
+        print('y0_gauss_err ', y0_gauss_err)
+        print('sig_x_gauss ', sig_x_gauss)
+        print('sig_y_gauss ', sig_y_gauss)
+        print('sig_x_gauss_err ', sig_x_gauss_err)
+        print('sig_y_gauss_err ', sig_y_gauss_err)
+        print('src_name_gauss ', src_name_gauss)
+        print('src_blend_gauss ', src_blend_gauss)
+
+        # check if the tranformed sigma of the gaussian sources is smaller than the sigma of the PSF
+        for index_gauss in range(len(x0_gauss)):
+            if (sig_x_gauss[index_gauss] < sig_psf) & (sig_x_gauss[index_gauss] < sig_psf):
+                print('hallo')
+                x0_pnt = np.append(x0_pnt, x0_gauss[index_gauss])
+                y0_pnt = np.append(y0_pnt, y0_gauss[index_gauss])
+                x0_pnt_err = np.append(x0_pnt_err, x0_gauss_err[index_gauss])
+                y0_pnt_err = np.append(y0_pnt_err, y0_gauss_err[index_gauss])
+                src_name_pnt = np.append(src_name_pnt, src_name_gauss[index_gauss])
+                src_blend_pnt = np.append(src_blend_pnt, src_blend_gauss[index_gauss])
+
+                x0_gauss = np.delete(x0_gauss, index_gauss, 0)
+                y0_gauss = np.delete(y0_gauss, index_gauss, 0)
+                x0_gauss_err = np.delete(x0_gauss_err, index_gauss, 0)
+                y0_gauss_err = np.delete(y0_gauss_err, index_gauss, 0)
+                sig_x_gauss = np.delete(sig_x_gauss, index_gauss, 0)
+                sig_y_gauss = np.delete(sig_y_gauss, index_gauss, 0)
+                sig_x_gauss_err = np.delete(sig_x_gauss_err, index_gauss, 0)
+                sig_y_gauss_err = np.delete(sig_y_gauss_err, index_gauss, 0)
+                src_name_gauss = np.delete(src_name_gauss, index_gauss, 0)
+                src_blend_gauss = np.delete(src_blend_gauss, index_gauss, 0)
+
+        print('x0_pnt ', x0_pnt)
+        print('y0_pnt ', y0_pnt)
+        print('x0_pnt_err ', x0_pnt_err)
+        print('y0_pnt_err ', y0_pnt_err)
+        print('src_name_pnt ', src_name_pnt)
+        print('src_blend_pnt ', src_blend_pnt)
+
+        print('x0_gauss ', x0_gauss)
+        print('y0_gauss ', y0_gauss)
+        print('x0_gauss_err ', x0_gauss_err)
+        print('y0_gauss_err ', y0_gauss_err)
+        print('sig_x_gauss ', sig_x_gauss)
+        print('sig_y_gauss ', sig_y_gauss)
+        print('sig_x_gauss_err ', sig_x_gauss_err)
+        print('sig_y_gauss_err ', sig_y_gauss_err)
+        print('src_name_gauss ', src_name_gauss)
+        print('src_blend_gauss ', src_blend_gauss)
+
+        name_closest_src_pnt = np.ones(len(x0_pnt), dtype=int) * -999
+        for index in range(len(x0_pnt)):
+            dist = np.sqrt((x0_pnt - x0_pnt[index]) ** 2 + (y0_pnt - y0_pnt[index]) ** 2)
+            # get all objects near the
+            index_close_neighbours = np.where((dist < pix_accuracy) & (dist != 0))
+            # get only the closest
+            print('index ', index, 'index_close_neighbours ', index_close_neighbours)
+            if len(index_close_neighbours[0]) == 0:
+                continue
+            smallest_dist = np.min(dist[index_close_neighbours])
+            index_smallest_dist = np.where(dist == smallest_dist)
+            print('smallest_dist ', smallest_dist, 'index_smallest_dist ', index_smallest_dist)
+
+            name_closest_src_pnt[index] = src_name_pnt[index_smallest_dist]
+
+        print('src_name_pnt ', src_name_pnt)
+        print('name_closest_src_pnt ', name_closest_src_pnt)
+
+        new_x0_pnt = []
+        new_y0_pnt = []
+        new_x0_pnt_err = []
+        new_y0_pnt_err = []
+        new_src_name_pnt = []
+        new_src_blend_pnt = []
+
+        name_list_already_blended_src = []
+
+        for index in range(len(x0_pnt)):
+
+            print('index ', index, ' source_name ', src_name_pnt[index], ' name_closest_src_pnt ',
+                  name_closest_src_pnt[index])
+            # if no closest neighbour is found, we just take this source
+            if name_closest_src_pnt[index] == -999:
+                new_x0_pnt.append(float(x0_pnt[index]))
+                new_y0_pnt.append(float(y0_pnt[index]))
+                new_x0_pnt_err.append(float(x0_pnt_err[index]))
+                new_y0_pnt_err.append(float(y0_pnt_err[index]))
+                new_src_name_pnt.append(int(src_name_pnt[index]))
+                new_src_blend_pnt.append(src_blend_pnt[index])
+                continue
+
+            # is the current name also the closest src of the closest src?
+            opponents_closest_src_name = name_closest_src_pnt[src_name_pnt == name_closest_src_pnt[index]][0]
+            index_closest_src = np.where(src_name_pnt == name_closest_src_pnt[index])
+
+            print('index ', index, ' source_name ', src_name_pnt[index],
+                  ' opponents_closest_src_name ', opponents_closest_src_name, ' index_closest_src ', index_closest_src)
+
+            if src_name_pnt[index] in name_list_already_blended_src:
+                continue
+
+            if src_name_pnt[index] == opponents_closest_src_name:
+                new_x0_pnt.append(np.mean([x0_pnt[index], x0_pnt[index_closest_src[0]][0]]))
+                new_y0_pnt.append(np.mean([y0_pnt[index], y0_pnt[index_closest_src[0]][0]]))
+                new_x0_pnt_err.append(np.mean([x0_pnt_err[index], x0_pnt_err[index_closest_src[0]][0]]))
+                new_y0_pnt_err.append(np.mean([y0_pnt_err[index], y0_pnt_err[index_closest_src[0]][0]]))
+                new_src_name_pnt.append(int(self.n_total_sources + 1))
+                new_src_blend_pnt.append([src_name_pnt[index], src_name_pnt[index_closest_src[0]][0]])
+                name_list_already_blended_src.append(src_name_pnt[index])
+                name_list_already_blended_src.append(src_name_pnt[index_closest_src[0]][0])
+                self.n_total_sources += 1
+            else:
+                new_x0_pnt.append(float(x0_pnt[index]))
+                new_y0_pnt.append(float(y0_pnt[index]))
+                new_x0_pnt_err.append(float(x0_pnt_err[index]))
+                new_y0_pnt_err.append(float(y0_pnt_err[index]))
+                new_src_name_pnt.append(int(src_name_pnt[index]))
+                new_src_blend_pnt.append(src_blend_pnt[index])
+        new_x0_pnt = np.array(new_x0_pnt, dtype=float)
+        new_y0_pnt = np.array(new_y0_pnt, dtype=float)
+        new_x0_pnt_err = np.array(new_x0_pnt_err, dtype=float)
+        new_y0_pnt_err = np.array(new_y0_pnt_err, dtype=float)
+        new_src_name_pnt = np.array(new_src_name_pnt, dtype=int)
+        new_src_blend_pnt = np.array(new_src_blend_pnt, dtype=object)
+
+        print('new_x0_pnt ', new_x0_pnt)
+        print('new_y0_pnt ', new_y0_pnt)
+        print('new_x0_pnt_err ', new_x0_pnt_err)
+        print('new_y0_pnt_err ', new_y0_pnt_err)
+        print('new_src_name_pnt ', new_src_name_pnt)
+        print('new_src_blend_pnt ', new_src_blend_pnt)
+
+        # create initial fit parameter dicts
+        zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict(amp=np.ones(len(new_x0_pnt)) * np.max(data) * 5,
+                                                                    x0=new_x0_pnt,
+                                                                    y0=new_y0_pnt,
+                                                                    src_name=new_src_name_pnt,
+                                                                    src_blend=new_src_blend_pnt,
+                                                                    amp_lim=(0, np.max(data) * max_amp_fact),
+                                                                    pos_var=pix_accuracy * 3,
+                                                                    starting_index=0)
+
+        zfit_param_restrict_dict_gauss = self.zfit_gauss_src_param_dict(
+            amp=np.ones(len(x0_gauss)) * np.max(data) * 5, x0=x0_gauss, y0=y0_gauss,
+            sig_x=sig_x_gauss, sig_y=sig_y_gauss, theta=theta_gauss, src_name=src_name_gauss, src_blend=src_blend_gauss,
+            lower_amp=0., upper_amp=np.max(data)*max_amp_fact,
+            lower_x0=x0_gauss-pix_accuracy, upper_x0=x0_gauss+pix_accuracy,
+            lower_y0=y0_gauss-pix_accuracy, upper_y0=y0_gauss+pix_accuracy,
+            lower_sig=sig_psf, upper_sig=np.max([sig_x_gauss, sig_y_gauss], axis=0) + pix_accuracy*3,
+            theta_var=(-np.pi/2, np.pi/2), starting_index=len(new_x0_pnt))
+
+        return zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss
+
     def zfit_model2data(self, band, x_grid, y_grid, data, err, zfit_param_restrict_dict_pnt,
-                        zfit_param_restrict_dict_gauss, index_iter, wcs):
+                        zfit_param_restrict_dict_gauss, index_iter, wcs, sig_psf):
 
         # init fit model
         self.init_zfit_models(band=band, img_x_grid=x_grid, img_y_gird=y_grid, img_data=data, img_err=err,
                               n_pnt=zfit_param_restrict_dict_pnt['n_src_pnt'],
-                              n_gauss=zfit_param_restrict_dict_gauss['n_src_gauss'])
+                              n_gauss=zfit_param_restrict_dict_gauss['n_src_gauss'], sig_psf=sig_psf)
         # create init zfit parameters
+        print('zfit_param_restrict_dict_pnt ', zfit_param_restrict_dict_pnt)
+
         params_pnt = self.create_zfit_pnt_param_list(zfit_param_restrict_dict_pnt=zfit_param_restrict_dict_pnt,
-                                                     index_iter=index_iter)
+                                                     band=band, index_iter=index_iter)
         params_gauss = self.create_zfit_gauss_param_list(zfit_param_restrict_dict_gauss=zfit_param_restrict_dict_gauss,
-                                                         index_iter=index_iter)
+                                                         band=band, index_iter=index_iter)
 
         print('params_pnt ', params_pnt)
         print('n_pnt ', zfit_param_restrict_dict_pnt['n_src_pnt'])
@@ -1107,13 +1807,12 @@ class AnalysisTools(data_access.DataAccess):
         print('Time to compute Hessian ', end - start)
         print(minimization_result)
 
-        print('zfit_param_restrict_dict_pnt ', zfit_param_restrict_dict_pnt)
-        print('zfit_param_restrict_dict_gauss ', zfit_param_restrict_dict_gauss)
         # get fit parameters
-        param_dict_pnt_pix_scale, param_dict_gauss_pix_scale = self.get_zfit_params(minimization_result=minimization_result,
-                                                                hesse_result=hesse_result,
-                                                                zfit_param_restrict_dict_pnt=zfit_param_restrict_dict_pnt,
-                                                                zfit_param_restrict_dict_gauss=zfit_param_restrict_dict_gauss)
+        param_dict_pnt_pix_scale, param_dict_gauss_pix_scale = self.get_zfit_params(
+            minimization_result=minimization_result,
+            hesse_result=hesse_result,
+            zfit_param_restrict_dict_pnt=zfit_param_restrict_dict_pnt,
+            zfit_param_restrict_dict_gauss=zfit_param_restrict_dict_gauss)
         print('param_dict_pnt_pix_scale ', param_dict_pnt_pix_scale)
         print('param_dict_gauss_pix_scale ', param_dict_gauss_pix_scale)
 
@@ -1121,14 +1820,19 @@ class AnalysisTools(data_access.DataAccess):
         param_dict_pnt_wcs_scale, param_dict_gauss_wcs_scale = \
             self.transform_params_pix2world(param_dict_pnt_pix_scale=param_dict_pnt_pix_scale,
                                             param_dict_gauss_pix_scale=param_dict_gauss_pix_scale, wcs=wcs)
+        print('param_dict_pnt_wcs_scale ', param_dict_pnt_wcs_scale)
+        print('param_dict_gauss_wcs_scale ', param_dict_gauss_wcs_scale)
 
         # get best fit
         best_fit, best_fit_model = self.assemble_zfit_model(param_dict_pnt_pix_scale=param_dict_pnt_pix_scale,
-                                                            param_dict_gauss_pix_scale=param_dict_gauss_pix_scale, band=band)
+                                                            param_dict_gauss_pix_scale=param_dict_gauss_pix_scale,
+                                                            band=band, sig_psf=sig_psf)
 
-        flux_pnt_src, flux_pnt_src_err = self.compute_zfit_pnt_src_flux(param_dict_pnt_pix_scale=param_dict_pnt_pix_scale, band=band)
-        flux_gauss_src, flux_gauss_src_err = self.compute_zfit_gauss_src_flux(param_dict_gauss_pix_scale=param_dict_gauss_pix_scale,
-                                                                              band=band)
+        flux_pnt_src, flux_pnt_src_err = self.compute_zfit_pnt_src_flux(
+            param_dict_pnt_pix_scale=param_dict_pnt_pix_scale, band=band)
+        flux_gauss_src, flux_gauss_src_err = self.compute_zfit_gauss_src_flux(
+            param_dict_gauss_pix_scale=param_dict_gauss_pix_scale,
+            band=band)
 
         # dict to return
         fit_result_dict = {'param_dict_pnt_pix_scale': param_dict_pnt_pix_scale,
@@ -1137,12 +1841,13 @@ class AnalysisTools(data_access.DataAccess):
                            'param_dict_gauss_wcs_scale': param_dict_gauss_wcs_scale,
                            'flux_pnt_src': flux_pnt_src, 'flux_pnt_src_err': flux_pnt_src_err,
                            'flux_gauss_src': flux_gauss_src, 'flux_gauss_src_err': flux_gauss_src_err,
-                           'best_fit': best_fit, 'best_fit_model': best_fit_model}
+                           'best_fit': best_fit, 'best_fit_model': best_fit_model,
+                           'n_total_sources': self.n_total_sources}
 
         return fit_result_dict
 
     def zfit_iter_de_blend(self, band, ra, dec, cutout_size, init_src_dict=None, n_iter=2,
-                           pix_var=1.5):
+                           pix_accuracy=1.5, sig_psf=0.5, max_amp_fact=1e5):
 
         # prepare all data
         # get cutout
@@ -1163,61 +1868,60 @@ class AnalysisTools(data_access.DataAccess):
 
         # get initial fitting parameters
         if init_src_dict is None:
-            # create SEP object table
-            sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub, rms=bkg.globalrms, psf=psf)
-            # init all parameters
-            zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict_from_src_det(x0=sep_src_dict['x'],
-                                                                                     y0=sep_src_dict['y'],
-                                                                                     a=sep_src_dict['a'],
-                                                                                     b=sep_src_dict['b'],
-                                                                                     max_data_val=np.max(data),
-                                                                                     pos_var_fact=3, max_data_fact=1e3)
+            # create SEP object table using standard parameters
+            sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub, rms=bkg.globalrms, psf=psf, snr=5)
+            # init parameters for point sources. note that `a´ is the major axis of the elliptical sources
+            zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict(
+                amp=np.max(data) * 5, x0=sep_src_dict['x'], y0=sep_src_dict['y'], sig=sig_psf, fix=False,
+                lower_sig=sig_psf/5, upper_sig=sig_psf*5,
+                lower_amp=0, upper_amp=np.max(data) * max_amp_fact,
+                lower_x0=np.array(sep_src_dict['x']) - np.array(sep_src_dict['a']),
+                upper_x0=np.array(sep_src_dict['x']) + np.array(sep_src_dict['a']),
+                lower_y0=np.array(sep_src_dict['y']) - np.array(sep_src_dict['a']),
+                upper_y0=np.array(sep_src_dict['y']) + np.array(sep_src_dict['a']))
+            # no gaussian sources for initial guess
             zfit_param_restrict_dict_gauss = {'n_src_gauss': 0}
         else:
-            # code access for src parameter access
-            # positions init_src_dict[]
+            # if from a previous fit parameters are known parameters will be transformed
+            zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss = \
+                self.get_init_guess_from_other_band(init_src_dict=init_src_dict, wcs=wcs, pix_accuracy=pix_accuracy,
+                                                    data=data, sig_psf=sig_psf, max_amp_fact=max_amp_fact)
 
-            
+        iterative_fit_result_dict = {}
 
-            zfit_param_restrict_dict_pnt = None
-            zfit_param_restrict_dict_gauss = None
-
+        # iterative fitting
         for fit_iter_index in range(n_iter):
             fit_result_dict = self.zfit_model2data(band=band, x_grid=x_grid, y_grid=y_grid, data=data, err=err,
                                                    zfit_param_restrict_dict_pnt=zfit_param_restrict_dict_pnt,
                                                    zfit_param_restrict_dict_gauss=zfit_param_restrict_dict_gauss,
-                                                   index_iter=fit_iter_index, wcs=wcs)
+                                                   index_iter=fit_iter_index, wcs=wcs, sig_psf=sig_psf)
 
-            zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss = \
+            iterative_fit_result_dict.update({'fit_results_band_%s_iter_%i' % (band, fit_iter_index): fit_result_dict})
+            iterative_fit_result_dict.update({'last_iter_index': fit_iter_index})
+
+
+            zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss, new_srcs_found = \
                 self.generate_new_init_zfit_model(data_sub=data_sub, psf=psf, fit_result_dict=fit_result_dict,
-                                                  band=band, wcs=wcs)
+                                                  band=band, wcs=wcs, sig_psf=sig_psf, max_amp_fact=max_amp_fact,
+                                                  pix_accuracy=pix_accuracy)
 
-        print('fit_result_dict ', fit_result_dict)
-
-        return fit_result_dict
-
-
-        # fig, ax = plt.subplots(ncols=4, nrows=1, figsize=(8, 8))
-        # ax[0].imshow(data_sub, origin='lower')
-        # ax[1].imshow(fit_result_dict['best_fit'], origin='lower')
-        # ax[2].imshow(fit_result_dict['best_fit_model'], origin='lower')
-        # ax[3].imshow(data_sub - fit_result_dict['best_fit'], origin='lower')
-        #
-        # plt.show()
-        #
-        # exit()
+            if not new_srcs_found:
+                break
 
 
 
+        return iterative_fit_result_dict
+
+        exit()
 
         # get sources in residuals
         new_bkg = sep.Background(np.array((data_sub - best_fit), dtype=float))
         new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - best_fit, rms=new_bkg.globalrms, psf=psf)
         # update source table
         ext_candidates, new_pnt_src_dict = self.update_pnt_src_table(src_x=param_dict['x0_list'],
-                                                                         src_y=param_dict['y0_list'],
-                                                                         new_source_table=new_sep_source_dict,
-                                                                         dist_to_ellipse=3)
+                                                                     src_y=param_dict['y0_list'],
+                                                                     new_source_table=new_sep_source_dict,
+                                                                     dist_to_ellipse=3)
         print('ext_candidates ', ext_candidates)
         print('new_pnt_src_dict ', new_pnt_src_dict)
 
@@ -1243,7 +1947,8 @@ class AnalysisTools(data_access.DataAccess):
         self.init_zfit_models(band=band, img_x_grid=x_grid, img_y_gird=y_grid, img_data=data, img_err=err,
                               n_pnt=len(param_restrict_dict_pnt) + len(new_param_restrict_dict_pnt), n_gauss=0)
         start = time.time()
-        loss = zfit.loss.SimpleLoss(self.squared_loss, params_pnt + params_gauss + new_params_pnt + new_params_gauss, errordef=1)
+        loss = zfit.loss.SimpleLoss(self.squared_loss, params_pnt + params_gauss + new_params_pnt + new_params_gauss,
+                                    errordef=1)
         minimizer = zfit.minimize.Minuit()
         new_result = minimizer.minimize(loss)
         end = time.time()
@@ -1261,17 +1966,16 @@ class AnalysisTools(data_access.DataAccess):
 
         new_new_bkg = sep.Background(np.array((data_sub - new_best_fit), dtype=float))
         new_new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - new_best_fit,
-                                                                 rms=new_new_bkg.globalrms, psf=psf)
-
+                                                              rms=new_new_bkg.globalrms, psf=psf)
 
         fig, ax = plt.subplots(ncols=4, nrows=2, figsize=(8, 8))
 
         ax[0, 0].imshow(data_sub, origin='lower')
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1281,9 +1985,9 @@ class AnalysisTools(data_access.DataAccess):
         ax[0, 1].imshow(best_fit, origin='lower')
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1297,9 +2001,9 @@ class AnalysisTools(data_access.DataAccess):
 
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1308,21 +2012,20 @@ class AnalysisTools(data_access.DataAccess):
 
         for i in range(len(new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
-                width=new_sep_source_dict['a'][i]*3,
-                height=new_sep_source_dict['b'][i]*3,
-                angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=new_sep_source_dict['a'][i] * 3,
+                        height=new_sep_source_dict['b'][i] * 3,
+                        angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('blue')
             e.set_linewidth(1)
             ax[0, 3].add_artist(e)
 
-
         ax[1, 0].imshow(data_sub, origin='lower')
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1330,9 +2033,9 @@ class AnalysisTools(data_access.DataAccess):
             ax[1, 0].text(sep_source_dict['x'][i], sep_source_dict['y'][i], '%i' % i)
         for j in range(len(new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_sep_source_dict['x'][j], new_sep_source_dict['y'][j]),
-                width=new_sep_source_dict['a'][j]*3,
-                height=new_sep_source_dict['b'][j]*3,
-                angle=new_sep_source_dict['theta'][j] * 180 / np.pi)
+                        width=new_sep_source_dict['a'][j] * 3,
+                        height=new_sep_source_dict['b'][j] * 3,
+                        angle=new_sep_source_dict['theta'][j] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1342,9 +2045,9 @@ class AnalysisTools(data_access.DataAccess):
         ax[1, 1].imshow(new_best_fit, origin='lower')
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1352,9 +2055,9 @@ class AnalysisTools(data_access.DataAccess):
             ax[1, 1].text(sep_source_dict['x'][i], sep_source_dict['y'][i], '%i' % i)
         for j in range(len(new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_sep_source_dict['x'][j], new_sep_source_dict['y'][j]),
-                width=new_sep_source_dict['a'][j]*3,
-                height=new_sep_source_dict['b'][j]*3,
-                angle=new_sep_source_dict['theta'][j] * 180 / np.pi)
+                        width=new_sep_source_dict['a'][j] * 3,
+                        height=new_sep_source_dict['b'][j] * 3,
+                        angle=new_sep_source_dict['theta'][j] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1367,9 +2070,9 @@ class AnalysisTools(data_access.DataAccess):
 
         for i in range(len(sep_source_dict['x'])):
             e = Ellipse(xy=(sep_source_dict['x'][i], sep_source_dict['y'][i]),
-                width=sep_source_dict['a'][i]*3,
-                height=sep_source_dict['b'][i]*3,
-                angle=sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=sep_source_dict['a'][i] * 3,
+                        height=sep_source_dict['b'][i] * 3,
+                        angle=sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1377,9 +2080,9 @@ class AnalysisTools(data_access.DataAccess):
             ax[1, 3].scatter(param_dict['x0_list'][i], param_dict['y0_list'][i])
         for i in range(len(new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
-                width=new_sep_source_dict['a'][i]*3,
-                height=new_sep_source_dict['b'][i]*3,
-                angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=new_sep_source_dict['a'][i] * 3,
+                        height=new_sep_source_dict['b'][i] * 3,
+                        angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
@@ -1387,23 +2090,15 @@ class AnalysisTools(data_access.DataAccess):
 
         for i in range(len(new_new_sep_source_dict['x'])):
             e = Ellipse(xy=(new_new_sep_source_dict['x'][i], new_new_sep_source_dict['y'][i]),
-                width=new_new_sep_source_dict['a'][i]*3,
-                height=new_new_sep_source_dict['b'][i]*3,
-                angle=new_new_sep_source_dict['theta'][i] * 180 / np.pi)
+                        width=new_new_sep_source_dict['a'][i] * 3,
+                        height=new_new_sep_source_dict['b'][i] * 3,
+                        angle=new_new_sep_source_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('blue')
             e.set_linewidth(1)
             ax[1, 3].add_artist(e)
 
-
         # plt.show()
         plt.savefig('plot_output/test_zfit.png')
 
         exit()
-
-
-
-
-
-
-
