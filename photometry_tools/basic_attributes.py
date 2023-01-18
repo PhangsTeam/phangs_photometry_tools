@@ -1,6 +1,7 @@
 """
 Classes to gather basic attributes such as folder names, observation statuses or physical constants
 """
+import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve
 from numpy import radians, sin, cos, exp, mean
 from tensorflow import keras
@@ -516,23 +517,27 @@ class FitModels:
             return None
         params_pnt = []
         for index in range(zfit_param_restrict_dict_pnt['n_src_pnt']):
+            if 'amp' in zfit_param_restrict_dict_pnt['pnt_%i' % index].keys():
+                key_string = ''
+            else:
+                key_string = 'init_'
             params_pnt.append(Parameter(name='amp_pnt_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_amp'],
+                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index][key_string + 'amp'],
                                         lower=zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_amp'],
                                         upper=zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_amp'],
                                         floating=not zfit_param_restrict_dict_pnt['pnt_%i' % index]['fix']))
             params_pnt.append(Parameter(name='x0_pnt_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_x0'],
+                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index][key_string + 'x0'],
                                         lower=zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_x0'],
                                         upper=zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_x0'],
                                         floating=not zfit_param_restrict_dict_pnt['pnt_%i' % index]['fix']))
             params_pnt.append(Parameter(name='y0_pnt_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_y0'],
+                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index][key_string + 'y0'],
                                         lower=zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_y0'],
                                         upper=zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_y0'],
                                         floating=not zfit_param_restrict_dict_pnt['pnt_%i' % index]['fix']))
             params_pnt.append(Parameter(name='sig_pnt_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index]['init_sig'],
+                                        value=zfit_param_restrict_dict_pnt['pnt_%i' % index][key_string + 'sig'],
                                         lower=zfit_param_restrict_dict_pnt['pnt_%i' % index]['lower_sig'],
                                         upper=zfit_param_restrict_dict_pnt['pnt_%i' % index]['upper_sig'],
                                         floating=not zfit_param_restrict_dict_pnt['pnt_%i' % index]['fix']))
@@ -544,50 +549,41 @@ class FitModels:
             return None
         params_gauss = []
         for index in range(zfit_param_restrict_dict_gauss['n_src_gauss']):
-            if zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']:
-                params_gauss.append(Parameter(name='amp_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_amp'],
-                                              floating=False))
-                params_gauss.append(Parameter(name='x0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_x0'],
-                                              floating=False))
-                params_gauss.append(Parameter(name='y0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_y0'],
-                                              floating=False))
-                params_gauss.append(Parameter(name='sig_x_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_x'],
-                                              floating=False))
-                params_gauss.append(Parameter(name='sig_y_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_y'],
-                                              floating=False))
-                params_gauss.append(Parameter(name='theta_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                              value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_theta'],
-                                              floating=False))
+            #if zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']:
+            if 'amp' in zfit_param_restrict_dict_gauss['gauss_%i' % index].keys():
+                key_string = ''
             else:
-                params_gauss.append(Parameter(name='amp_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_amp'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_amp'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_amp']))
-                params_gauss.append(Parameter(name='x0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_x0'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_x0'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_x0']))
-                params_gauss.append(Parameter(name='y0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_y0'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_y0'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_y0']))
-                params_gauss.append(Parameter(name='sig_x_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_x'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_x'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_x']))
-                params_gauss.append(Parameter(name='sig_y_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_sig_y'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_y'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_y']))
-                params_gauss.append(Parameter(name='theta_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
-                                    value=zfit_param_restrict_dict_gauss['gauss_%i' % index]['init_theta'],
-                                    lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_theta'],
-                                    upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_theta']))
+                key_string = 'init_'
+            params_gauss.append(Parameter(name='amp_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'amp'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_amp'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_amp'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
+            params_gauss.append(Parameter(name='x0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'x0'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_x0'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_x0'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
+            params_gauss.append(Parameter(name='y0_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'y0'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_y0'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_y0'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
+            params_gauss.append(Parameter(name='sig_x_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'sig_x'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_x'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_x'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
+            params_gauss.append(Parameter(name='sig_y_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'sig_y'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_sig_y'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_sig_y'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
+            params_gauss.append(Parameter(name='theta_gauss_%i_iter_%i_%s' % (index+starting_index, index_iter, band),
+                                          value=zfit_param_restrict_dict_gauss['gauss_%i' % index][key_string + 'theta'],
+                                          lower=zfit_param_restrict_dict_gauss['gauss_%i' % index]['lower_theta'],
+                                          upper=zfit_param_restrict_dict_gauss['gauss_%i' % index]['upper_theta'],
+                                          floating=not zfit_param_restrict_dict_gauss['gauss_%i' % index]['fix']))
         return params_gauss
 
     def chi2(self, model_predict):
@@ -605,7 +601,7 @@ class FitModels:
         squared = ((model_predict - self.current_img_data) / self.current_img_err) ** 2
         return mean(squared)
 
-    def prediction_func(self, params, n_gauss, n_pnt, band):
+    def prediction_func_old(self, params, n_gauss, n_pnt, band):
 
         if n_gauss > 0:
             prediction = getattr(self, 'gauss2d_rot_conv_%s' % band)(x=self.current_img_x_grid,
@@ -650,14 +646,16 @@ class FitModels:
                          x0=params[1 + 6 * gauss_index + 3 * pnt_index],
                          y0=params[2 + 6 * gauss_index + 3 * pnt_index])
 
-        return self.chi2(prediction)
+        chi2 = self.chi2(prediction)
+        print('chi2 ', chi2)
+        return chi2
 
-    def add_predict_func(self, n_gauss, n_pnt, band):
+    def add_predict_func_old(self, n_gauss, n_pnt, band):
         setattr(
             self, 'predict_func_%s' % band, lambda params:
-            self.prediction_func(band=band, n_gauss=n_gauss, n_pnt=n_pnt, params=params))
+            self.prediction_func_old(band=band, n_gauss=n_gauss, n_pnt=n_pnt, params=params))
 
-    def init_zfit_models(self, band, img_x_grid, img_y_gird, img_data, img_err, n_gauss, n_pnt, sig_psf):
+    def init_zfit_models(self, band, img_x_grid, img_y_gird, img_data, img_err, n_gauss, n_pnt):
 
         # initiate fit functions
         self.zfit_current_band = band
@@ -679,6 +677,7 @@ class FitModels:
                 self.add_pnt_sig_src_model_band_conv(band=self.zfit_current_band)
 
     def squared_loss(self, params):
+
         if self.zfit_n_gauss > 0:
             prediction = getattr(self, 'gauss2d_rot_conv_%s' % self.zfit_current_band)(x=self.current_img_x_grid,
                                                                                        y=self.current_img_y_grid,
@@ -688,7 +687,7 @@ class FitModels:
                                                                                        sig_x=params[3],
                                                                                        sig_y=params[4],
                                                                                        theta=params[5])
-            gauss_index = 1
+            gauss_index = 0
             for gauss_index in range(1, self.zfit_n_gauss):
                 prediction += getattr(self, 'gauss2d_rot_conv_%s' % self.zfit_current_band) \
                     (x=self.current_img_x_grid, y=self.current_img_y_grid,
@@ -704,26 +703,26 @@ class FitModels:
         if self.zfit_n_pnt > 0:
             if self.zfit_n_gauss == 0:
                 prediction = getattr(self, 'pnt_src_sig_conv_%s' % self.zfit_current_band)(x=self.current_img_x_grid,
-                                                                                            y=self.current_img_y_grid,
-                                                                                            amp=params[0],
-                                                                                            x0=params[1],
-                                                                                            y0=params[2],
-                                                                                            sig=params[3])
+                                                                                           y=self.current_img_y_grid,
+                                                                                           amp=params[0],
+                                                                                           x0=params[1],
+                                                                                           y0=params[2],
+                                                                                           sig=params[3])
                 for pnt_index in range(1, self.zfit_n_pnt):
                     prediction += getattr(self, 'pnt_src_sig_conv_%s' % self.zfit_current_band) \
                         (x=self.current_img_x_grid, y=self.current_img_y_grid,
-                         amp=params[0 + 6 * gauss_index + 4 * pnt_index],
-                         x0=params[1 + 6 * gauss_index + 4 * pnt_index],
-                         y0=params[2 + 6 * gauss_index + 4 * pnt_index],
-                         sig=params[3 + 6 * gauss_index + 4 * pnt_index])
+                         amp=params[0 + 4 * pnt_index],
+                         x0=params[1 + 4 * pnt_index],
+                         y0=params[2 + 4 * pnt_index],
+                         sig=params[3 + 4 * pnt_index])
             else:
                 for pnt_index in range(0, self.zfit_n_pnt):
                     prediction += getattr(self, 'pnt_src_sig_conv_%s' % self.zfit_current_band) \
                         (x=self.current_img_x_grid, y=self.current_img_y_grid,
-                         amp=params[0 + 6 * gauss_index + 4 * pnt_index],
-                         x0=params[1 + 6 * gauss_index + 4 * pnt_index],
-                         y0=params[2 + 6 * gauss_index + 4 * pnt_index],
-                         sig=params[3 + 6 * gauss_index + 4 * pnt_index])
+                         amp=params[0 + 6 * (gauss_index+1) + 4 * pnt_index],
+                         x0=params[1 + 6 * (gauss_index+1) + 4 * pnt_index],
+                         y0=params[2 + 6 * (gauss_index+1) + 4 * pnt_index],
+                         sig=params[3 + 6 * (gauss_index+1) + 4 * pnt_index])
 
         return self.chi2(prediction)
 

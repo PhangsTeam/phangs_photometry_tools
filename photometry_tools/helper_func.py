@@ -326,8 +326,8 @@ def set_mixt_model_params(fmodel, init_pos, param_lim, img_mean, img_std, img_ma
 
 def create_2d_data_mesh(data):
     # create x and y data grid
-    x = np.linspace(0, data.shape[0]-1, data.shape[0])
-    y = np.linspace(0, data.shape[1]-1, data.shape[1])
+    x = np.linspace(0, data.shape[1]-1, data.shape[1])
+    y = np.linspace(0, data.shape[0]-1, data.shape[0])
     x_grid, y_grid = np.meshgrid(x, y)
     return x_grid, y_grid
 

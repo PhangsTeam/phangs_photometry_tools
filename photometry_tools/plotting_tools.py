@@ -65,10 +65,12 @@ class PlotPhotometry:
             else:
                 axis_dict['ax_%s' % hst_band].cla()
                 continue
+
             # set limits
             set_lim2cutout(ax=axis_dict['ax_%s' % hst_band], cutout=cutout_dict['%s_img_cutout' % hst_band],
                            cutout_pos=cutout_dict['cutout_pos'],
                            ra_length=axis_length[0], dec_length=axis_length[1])
+
             # plot circles
             if circ_pos is not None:
                 plot_coord_circle(ax=axis_dict['ax_%s' % hst_band], pos=circ_pos, rad=circ_rad,
@@ -100,7 +102,7 @@ class PlotPhotometry:
             else:
                 axis_dict['ax_%s' % nircam_band].cla()
                 continue
-            # set limits
+            # # set limits
             set_lim2cutout(ax=axis_dict['ax_%s' % nircam_band], cutout=cutout_dict['%s_img_cutout' % nircam_band],
                            cutout_pos=cutout_dict['cutout_pos'],
                            ra_length=axis_length[0], dec_length=axis_length[1])
@@ -831,12 +833,24 @@ def create_cbar(ax_cbar, cmap, norm, cbar_label, fontsize, ticks=None, labelpad=
 
 
 def set_lim2cutout(ax, cutout, cutout_pos, ra_length, dec_length):
-    lim_top_left = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra + ra_length / 2 * u.arcsec,
-                                                      cutout_pos.dec + dec_length / 2 * u.arcsec))
-    lim_bottom_right = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra - ra_length / 2 * u.arcsec,
-                                                          cutout_pos.dec - dec_length / 2 * u.arcsec))
-    ax.set_xlim(lim_top_left[0], lim_bottom_right[0])
-    ax.set_ylim(lim_bottom_right[1], lim_top_left[1])
+    # lim_top_left = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra + ra_length / 2 * u.arcsec,
+    #                                                   cutout_pos.dec + dec_length / 2 * u.arcsec))
+    # lim_bottom_right = cutout.wcs.world_to_pixel(SkyCoord(cutout_pos.ra - ra_length / 2 * u.arcsec,
+    #                                                       cutout_pos.dec - dec_length / 2 * u.arcsec))
+    # # ax.set_xlim(lim_top_left[0], lim_bottom_right[0])
+    # # ax.set_ylim(lim_bottom_right[1], lim_top_left[1])
+
+    ra_length_pix = helper_func.transform_world2pix_scale(length_in_arcsec=ra_length, wcs=cutout.wcs, dim=0)
+    dec_length_pix = helper_func.transform_world2pix_scale(length_in_arcsec=dec_length, wcs=cutout.wcs, dim=1)
+
+    ra_pix_length = cutout.data.shape[0]
+    dec_pix_length = cutout.data.shape[1]
+
+    border_ra = (ra_pix_length - ra_length_pix)/2
+    border_dec = (dec_pix_length - dec_length_pix)/2
+
+    ax.set_xlim(border_ra, ra_pix_length-border_ra)
+    ax.set_ylim(border_dec, dec_pix_length-border_dec)
 
 
 def plot_coord_circle(ax, pos, rad, color, linestyle='-', linewidth=3, alpha=1., fill=False):
