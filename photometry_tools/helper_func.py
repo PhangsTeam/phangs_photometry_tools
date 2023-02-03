@@ -90,7 +90,6 @@ def get_img_cutout(img, wcs, coord, cutout_size):
     cutout : astropy.nddata.Cutout2D object
         cutout object of the initial image
     """
-
     if isinstance(cutout_size, tuple):
         size = cutout_size * u.arcsec
     elif isinstance(cutout_size, float) | isinstance(cutout_size, int):
@@ -257,6 +256,13 @@ def transform_pix2world_scale(pixel_length, wcs, dim=0, return_unit='arcsec'):
 def transform_world2pix_scale(length_in_arcsec, wcs, dim=0):
 
     return (length_in_arcsec*u.arcsec).to(u.deg) / wcs.proj_plane_pixel_scales()[dim]
+
+
+def calc_coord_separation(ra_ref, dec_ref, ra, dec):
+    coord_ref = SkyCoord(ra=ra_ref, dec=dec_ref, unit=(u.degree, u.degree), frame='fk5')
+    coord = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree), frame='fk5')
+
+    return coord_ref.separation(coord)
 
 
 def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max, running_prefix='g_'):

@@ -5,6 +5,7 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import sep
+import time
 
 from photometry_tools import data_access, helper_func
 
@@ -14,8 +15,11 @@ from astropy.table import QTable, vstack
 
 from astropy.stats import sigma_clipped_stats
 
-import zfit
-import time
+
+try:
+    import zfit
+except (ImportError, ModuleNotFoundError) as err:
+    print('zfit was not imported. Deblending functions are therefore not available')
 
 
 class AnalysisTools(data_access.DataAccess):

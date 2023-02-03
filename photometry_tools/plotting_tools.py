@@ -899,7 +899,7 @@ def mulit_color_text_annotation(figure, ax, list_strings, list_color, pos, fonts
         t = transforms.offset_copy(text._transform, x=ex.width, units='dots')
 
 
-def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2):
+def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2, linestyle='-'):
     if isinstance(box_size, tuple):
         box_size = box_size * u.arcsec
     elif isinstance(box_size, float) | isinstance(box_size, int):
@@ -907,15 +907,19 @@ def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2):
     else:
         raise KeyError('cutout_size must be float or tuple')
 
-    top_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + box_size[0] / 2, dec=coord.dec + box_size[1] / 2))
-    top_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + box_size[0] / 2, dec=coord.dec - box_size[1] / 2))
-    bottom_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - box_size[0] / 2, dec=coord.dec + box_size[1] / 2))
-    bottom_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - box_size[0] / 2, dec=coord.dec - box_size[1] / 2))
+    top_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + (box_size[1] / 2)/np.cos(coord.dec.degree*np.pi/180),
+                                               dec=coord.dec + (box_size[0] / 2)))
+    top_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - (box_size[1] / 2)/np.cos(coord.dec.degree*np.pi/180),
+                                                dec=coord.dec + (box_size[0] / 2)))
+    bottom_left_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra + (box_size[1] / 2)/np.cos(coord.dec.degree*np.pi/180),
+                                                  dec=coord.dec - (box_size[0] / 2)))
+    bottom_right_pix = wcs.world_to_pixel(SkyCoord(ra=coord.ra - (box_size[1] / 2)/np.cos(coord.dec.degree*np.pi/180),
+                                                   dec=coord.dec - (box_size[0] / 2)))
 
-    ax.plot([top_left_pix[0], top_right_pix[0]], [top_left_pix[1], top_right_pix[1]], color=color, linewidth=linewidth)
+    ax.plot([top_left_pix[0], top_right_pix[0]], [top_left_pix[1], top_right_pix[1]], color=color, linewidth=linewidth, linestyle=linestyle)
     ax.plot([bottom_left_pix[0], bottom_right_pix[0]], [bottom_left_pix[1], bottom_right_pix[1]], color=color,
-            linewidth=linewidth)
+            linewidth=linewidth, linestyle=linestyle)
     ax.plot([top_left_pix[0], bottom_left_pix[0]], [top_left_pix[1], bottom_left_pix[1]], color=color,
-            linewidth=linewidth)
+            linewidth=linewidth, linestyle=linestyle)
     ax.plot([top_right_pix[0], bottom_right_pix[0]], [top_right_pix[1], bottom_right_pix[1]], color=color,
-            linewidth=linewidth)
+            linewidth=linewidth, linestyle=linestyle)

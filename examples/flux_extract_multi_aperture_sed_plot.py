@@ -22,7 +22,7 @@ phangs_photometry.load_hst_nircam_miri_bands(flux_unit='mJy')
 ra = 24.173946 - 33.5 / 3600
 dec = 15.783662 - 27.6 / 3600
 # size of image
-size_of_cutout = (5, 5)
+size_of_cutout = (2, 2)
 axis_length = (size_of_cutout[0] - 0.1, size_of_cutout[1] - 0.1)
 cutout_dict = phangs_photometry.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec,
                                                      cutout_size=size_of_cutout, include_err=True)
@@ -64,8 +64,6 @@ for band in cutout_dict['band_list']:
 
 print(aperture_dict)
 
-exit()
-
 # for plotting we want to use MJy/sr thus we convert the flux and
 phangs_photometry.change_hst_nircam_miri_band_units(new_unit='MJy/sr')
 
@@ -74,7 +72,7 @@ phangs_photometry.change_hst_nircam_miri_band_units(new_unit='MJy/sr')
 #                                                      cutout_size=[2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
 #                                                      include_err=True)
 
-figure = PlotPhotometry.plot_cigale_sed_panel(
+figure, ax = PlotPhotometry.plot_cigale_sed_panel(
         hst_band_list=hst_bands,
         nircam_band_list=phangs_photometry.nircam_targets[phangs_photometry.target_name]['observed_bands'],
         miri_band_list=phangs_photometry.miri_targets[phangs_photometry.target_name]['observed_bands'],
