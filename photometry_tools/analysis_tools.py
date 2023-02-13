@@ -1413,13 +1413,13 @@ class AnalysisTools(data_access.DataAccess):
             new_srcs_found = True
 
         if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
-            psf_pix_rad = self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee%i' % 80]
+            psf_pix_rad = self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee%i' % 50]
         elif band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
-            psf_pix_rad = self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee%i' % 80]
+            psf_pix_rad = self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee%i' % 50]
         elif band in self.nircam_bands:
-            psf_pix_rad = self.nircam_encircle_apertures_arcsec[band]['ee%i' % 80]
+            psf_pix_rad = self.nircam_encircle_apertures_arcsec[band]['ee%i' % 50]
         elif band in self.miri_bands:
-            psf_pix_rad = self.miri_encircle_apertures_arcsec[band]['ee%i' % 80]
+            psf_pix_rad = self.miri_encircle_apertures_arcsec[band]['ee%i' % 50]
         else:
             raise KeyError('the band is not observed ! ')
         #psf_pix_rad = helper_func.transform_world2pix_scale(self.nircam_encircle_apertures_arcsec[band]['ee80'], wcs=wcs)

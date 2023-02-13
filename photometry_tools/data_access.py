@@ -150,7 +150,10 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         if miri_data_folder is None:
             miri_data_folder = self.miri_data_path / self.miri_ver_folder_names[self.miri_data_ver]
-        ending_of_band_file = '%s_miri_%s_anchored.fits' % (self.target_name, band.lower())
+        if self.miri_data_ver == 'v0p6':
+            ending_of_band_file = '%s_miri_lv3_%s_i2d_align.fits' % (self.target_name, band.lower())
+        else:
+            ending_of_band_file = '%s_miri_%s_anchored.fits' % (self.target_name, band.lower())
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=miri_data_folder,
                                                        str_in_file_name=ending_of_band_file)
@@ -311,7 +314,11 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         # load the band observations
         file_name = self.get_miri_img_file_name(band=band, miri_data_folder=miri_data_folder, file_name=img_file_name)
-        img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name)
+        if self.miri_data_ver == 'v0p6':
+            hdu_number = 'SCI'
+        else:
+            hdu_number = 0
+        img_data, img_header, img_wcs = helper_func.load_img(file_name=file_name, hdu_number=hdu_number)
         pixel_area_size_sr = img_wcs.proj_plane_pixel_area().value * self.sr_per_square_deg
         # rescale data image
         if flux_unit == 'Jy':
@@ -331,9 +338,14 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                      '%s_wcs_img' % band: img_wcs, '%s_unit_img' % band: flux_unit,
                                      '%s_pixel_area_size_sr_img' % band: pixel_area_size_sr})
         if load_err:
-            err_file_name = self.get_miri_err_file_name(band=band, miri_data_folder=miri_data_folder,
-                                                        file_name=err_file_name)
-            err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
+            if self.miri_data_ver == 'v0p6':
+                err_file_name = file_name
+                hdu_number_err = 'ERR'
+            else:
+                err_file_name = self.get_miri_err_file_name(band=band, miri_data_folder=miri_data_folder,
+                                                            file_name=err_file_name)
+                hdu_number_err = 0
+            err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name, hdu_number=hdu_number_err)
             err_data *= conversion_factor
             self.miri_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
                                          '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,

@@ -1,10 +1,9 @@
 """
 Classes to gather basic attributes such as folder names, observation statuses or physical constants
 """
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve
-from numpy import radians, sin, cos, exp, mean
-from tensorflow import keras
+import numpy as np
 import tensorflow as tf
 
 from zfit import Parameter
@@ -26,7 +25,7 @@ class PhangsDataStructure:
 
         self.hst_ver_folder_names = {'v1': 'v1.0', 'v0.9': 'v0.9'}
         self.nircam_ver_folder_names = {'v0p4p2': 'v0p4p2'}
-        self.miri_ver_folder_names = {'v0p5': 'v0p5_miri'}
+        self.miri_ver_folder_names = {'v0p5': 'v0p5_miri', 'v0p6': 'v0p6_miri'}
 
         self.hst_targets = {
             'ngc0628':
@@ -445,24 +444,24 @@ class FitModels:
     def gauss2d_rot(x, y, amp, x0, y0, sig_x, sig_y, theta):
         sigx2 = sig_x ** 2
         sigy2 = sig_y ** 2
-        a = cos(theta) ** 2 / (2 * sigx2) + sin(theta) ** 2 / (2 * sigy2)
-        b = sin(theta) ** 2 / (2 * sigx2) + cos(theta) ** 2 / (2 * sigy2)
-        c = sin(2 * theta) / (4 * sigx2) - sin(2 * theta) / (4 * sigy2)
+        a = np.cos(theta) ** 2 / (2 * sigx2) + np.sin(theta) ** 2 / (2 * sigy2)
+        b = np.sin(theta) ** 2 / (2 * sigx2) + np.cos(theta) ** 2 / (2 * sigy2)
+        c = np.sin(2 * theta) / (4 * sigx2) - np.sin(2 * theta) / (4 * sigy2)
 
         expo = -a * (x - x0) ** 2 - b * (y - y0) ** 2 - 2 * c * (x - x0) * (y - y0)
 
-        return amp * exp(expo)
+        return amp * np.exp(expo)
 
     def gauss2d_rot_conv(self, band, x, y, amp, x0, y0, sig_x, sig_y, theta):
         sigx2 = sig_x ** 2
         sigy2 = sig_y ** 2
-        a = cos(theta) ** 2 / (2 * sigx2) + sin(theta) ** 2 / (2 * sigy2)
-        b = sin(theta) ** 2 / (2 * sigx2) + cos(theta) ** 2 / (2 * sigy2)
-        c = sin(2 * theta) / (4 * sigx2) - sin(2 * theta) / (4 * sigy2)
+        a = np.cos(theta) ** 2 / (2 * sigx2) + np.sin(theta) ** 2 / (2 * sigy2)
+        b = np.sin(theta) ** 2 / (2 * sigx2) + np.cos(theta) ** 2 / (2 * sigy2)
+        c = np.sin(2 * theta) / (4 * sigx2) - np.sin(2 * theta) / (4 * sigy2)
 
         expo = -a * (x - x0) ** 2 - b * (y - y0) ** 2 - 2 * c * (x - x0) * (y - y0)
 
-        gauss = amp * exp(expo)
+        gauss = amp * np.exp(expo)
         blurred = fftconvolve(gauss, self.psf_dict['native_psf_%s' % band], mode='same')
 
         return blurred
@@ -484,10 +483,10 @@ class FitModels:
 
     @staticmethod
     def pnt_src(x, y, amp, x0, y0, sig):
-        return amp * exp(-((x - x0) ** 2 + (y - y0) ** 2) / sig**2)
+        return amp * np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / sig**2)
 
     def pnt_src_conv(self, band, x, y, amp, x0, y0, sig):
-        gauss = amp * exp(-((x - x0) ** 2 + (y - y0) ** 2) / (sig**2))
+        gauss = amp * np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (sig**2))
         blurred = fftconvolve(gauss, self.psf_dict['native_psf_%s' % band], mode='same')
         return blurred
 
@@ -599,7 +598,7 @@ class FitModels:
             returns the mean chi^2 value
         """
         squared = ((model_predict - self.current_img_data) / self.current_img_err) ** 2
-        return mean(squared)
+        return np.sum(squared)
 
     def prediction_func_old(self, params, n_gauss, n_pnt, band):
 
