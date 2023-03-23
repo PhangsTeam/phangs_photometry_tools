@@ -3,6 +3,8 @@ Plotting tools for photometry and SED fitting
 """
 
 import numpy as np
+from scipy import stats
+
 import matplotlib.pyplot as plt
 from matplotlib.colorbar import ColorbarBase
 from matplotlib.colors import Normalize, LogNorm
@@ -29,19 +31,19 @@ class PlotPhotometry:
     def plot_cutout_panel_hst_nircam_miri(hst_band_list, nircam_band_list, miri_band_list, cutout_dict,
                                           circ_pos=None, circ_rad=None, circ_color=None,
                                           fontsize=18, figsize=(18, 13),
-                                          vmax_vmin_hst=None, vmax_vmin_nircam=None, vmax_vmin_miri=None,
+                                          vmin_vmax_hst=None, vmin_vmax_nircam=None, vmin_vmax_miri=None,
                                           ticks_hst=None, ticks_nircam=None, ticks_miri=None,
                                           cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
                                           log_scale=False, axis_length=None,
                                           ra_tick_num=3, dec_tick_num=3):
 
-        norm_hst = compute_cbar_norm(vmax_vmin=vmax_vmin_hst,
+        norm_hst = compute_cbar_norm(vmin_vmax=vmin_vmax_hst,
                                      cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in hst_band_list],
                                      log_scale=log_scale)
-        norm_nircam = compute_cbar_norm(vmax_vmin=vmax_vmin_nircam,
+        norm_nircam = compute_cbar_norm(vmin_vmax=vmin_vmax_nircam,
                                         cutout_list=[cutout_dict['%s_img_cutout' % band].data
                                                      for band in nircam_band_list], log_scale=log_scale)
-        norm_miri = compute_cbar_norm(vmax_vmin=vmax_vmin_miri,
+        norm_miri = compute_cbar_norm(vmin_vmax=vmin_vmax_miri,
                                       cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in miri_band_list],
                                       log_scale=log_scale)
         if log_scale:
@@ -173,19 +175,19 @@ class PlotPhotometry:
     def plot_circ_flux_extraction(hst_band_list, nircam_band_list, miri_band_list, cutout_dict, aperture_dict,
                                   circ_pos=None, circ_rad=None, circ_color=None,
                                   fontsize=18, figsize=(18, 13),
-                                  vmax_vmin_hst=None, vmax_vmin_nircam=None, vmax_vmin_miri=None,
+                                  vmin_vmax_hst=None, vmin_vmax_nircam=None, vmin_vmax_miri=None,
                                   ticks_hst=None, ticks_nircam=None, ticks_miri=None,
                                   cmap_hst='Blues', cmap_nircam='Greens', cmap_miri='Reds',
                                   log_scale=False, axis_length=None,
                                   ra_tick_num=3, dec_tick_num=3):
 
-        norm_hst = compute_cbar_norm(vmax_vmin=vmax_vmin_hst,
+        norm_hst = compute_cbar_norm(vmin_vmax=vmin_vmax_hst,
                                      cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in hst_band_list],
                                      log_scale=log_scale)
-        norm_nircam = compute_cbar_norm(vmax_vmin=vmax_vmin_nircam,
+        norm_nircam = compute_cbar_norm(vmin_vmax=vmin_vmax_nircam,
                                         cutout_list=[cutout_dict['%s_img_cutout' % band].data
                                                      for band in nircam_band_list], log_scale=log_scale)
-        norm_miri = compute_cbar_norm(vmax_vmin=vmax_vmin_miri,
+        norm_miri = compute_cbar_norm(vmin_vmax=vmin_vmax_miri,
                                       cutout_list=[cutout_dict['%s_img_cutout' % band].data for band in miri_band_list],
                                       log_scale=log_scale)
         if log_scale:
@@ -768,13 +770,13 @@ def arr_axis_params(ax, ra_tick_label=True, dec_tick_label=True,
     ax.coords['dec'].display_minor_ticks(True)
 
 
-def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
+def compute_cbar_norm(vmin_vmax=None, cutout_list=None, log_scale=False):
     """
     Computing the color bar scale for a single or multiple cutouts.
 
     Parameters
     ----------
-    vmax_vmin : tuple
+    vmin_vmax : tuple
     cutout_list : list
         This list should include all cutouts
     log_scale : bool
@@ -783,11 +785,11 @@ def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
     -------
     norm : ``matplotlib.colors.Normalize``  or ``matplotlib.colors.LogNorm``
     """
-    if (vmax_vmin is None) & (cutout_list is None):
-        raise KeyError('either vmax_vmin or cutout_list must be not None')
+    if (vmin_vmax is None) & (cutout_list is None):
+        raise KeyError('either vmin_vmax or cutout_list must be not None')
 
     # get maximal value
-    if vmax_vmin is None:
+    if vmin_vmax is None:
         list_of_means = [np.nanmean(cutout) for cutout in cutout_list]
         list_of_stds = [np.nanstd(cutout) for cutout in cutout_list]
         mean, std = (np.nanmean(list_of_means), np.nanstd(list_of_stds))
@@ -795,7 +797,7 @@ def compute_cbar_norm(vmax_vmin=None, cutout_list=None, log_scale=False):
         vmin = mean - 5 * std
         vmax = mean + 20 * std
     else:
-        vmin, vmax = vmax_vmin[0], vmax_vmin[1]
+        vmin, vmax = vmin_vmax[0], vmin_vmax[1]
     if log_scale:
         if vmin < 0:
             vmin = vmax / 100
@@ -923,3 +925,402 @@ def draw_box(ax, wcs, coord, box_size, color='k', linewidth=2, linestyle='-'):
             linewidth=linewidth, linestyle=linestyle)
     ax.plot([top_right_pix[0], bottom_right_pix[0]], [top_right_pix[1], bottom_right_pix[1]], color=color,
             linewidth=linewidth, linestyle=linestyle)
+
+
+class DensityContours:
+
+    def __init__(self):
+        r"""
+        Class to produce contour lines
+
+        """
+
+    @staticmethod
+    def compute_contour_counts(x_data, y_data):
+
+        good = np.invert(((np.isnan(x_data) | np.isnan(y_data)) | (np.isinf(x_data) | np.isinf(y_data))))
+
+        k = stats.gaussian_kde(np.vstack([x_data[good], y_data[good]]))
+        xi, yi = np.mgrid[x_data[good].min():x_data[good].max():x_data[good].size**0.5*1j,
+                              y_data[good].min():y_data[good].max():y_data[good].size**0.5*1j]
+
+        zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+
+        # set zi_1 to 0-1 scale
+        zi = (zi-zi.min())/(zi.max() - zi.min())
+        zi = zi.reshape(xi.shape)
+        return xi, yi, zi
+
+    @staticmethod
+    def plot_contours_percentage(ax, xi, yi, zi, color='black', percent=True, **kwargs):
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs.get('linewidth')
+        else:
+            linewidth = 1.5
+
+        if 'fontsize' in kwargs:
+            fontsize = kwargs.get('fontsize')
+        else:
+            fontsize = 8
+
+        if 'alpha' in kwargs:
+            alpha = kwargs.get('alpha')
+        else:
+            alpha = 1
+
+        if 'contour_levels' in kwargs:
+            contour_levels = kwargs.get('contour_levels')
+        else:
+            contour_levels = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+        cs = ax.contour(xi, yi, zi, levels=contour_levels, colors=color, linewidths=linewidth, origin='lower',
+                        alpha=alpha)
+        if percent:
+            ax.clabel(cs, fmt='%.2f', colors=color, fontsize=fontsize)
+
+    @staticmethod
+    def get_contours_percentage(ax, x_data, y_data,
+                                color='black', percent=True, **kwargs):
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs.get('linewidth')
+        else:
+            linewidth = 1.5
+
+        if 'fontsize' in kwargs:
+            fontsize = kwargs.get('fontsize')
+        else:
+            fontsize = 8
+
+        if 'alpha' in kwargs:
+            alpha = kwargs.get('alpha')
+        else:
+            alpha = 1
+
+        if 'contour_levels' in kwargs:
+            contour_levels = kwargs.get('contour_levels')
+        else:
+            contour_levels = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+            # contour_levels = [0.68, 0.95]
+
+        good = np.invert(((np.isnan(x_data) | np.isnan(y_data)) | (np.isinf(x_data) | np.isinf(y_data))))
+
+        k = stats.gaussian_kde(np.vstack([x_data[good], y_data[good]]))
+        xi, yi = np.mgrid[x_data[good].min():x_data[good].max():x_data[good].size**0.5*1j,
+                              y_data[good].min():y_data[good].max():y_data[good].size**0.5*1j]
+
+        zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+
+        # set zi_1 to 0-1 scale
+        zi = (zi-zi.min())/(zi.max() - zi.min())
+        zi = zi.reshape(xi.shape)
+
+        cs = ax.contour(xi, yi, zi, levels=contour_levels, colors=color, linewidths=linewidth, origin='lower',
+                        alpha=alpha)
+        if percent:
+            ax.clabel(cs, fmt='%.2f', colors=color, fontsize=fontsize)
+
+    @staticmethod
+    def get_two_contours_percentage(ax, x_data_1, y_data_1, x_data_2, y_data_2,
+                                    color_1='black', color_2='blue', percent_1=True, percent_2=True, **kwargs):
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs.get('linewidth')
+        else:
+            linewidth = 1.5
+
+        if 'fontsize' in kwargs:
+            fontsize = kwargs.get('fontsize')
+        else:
+            fontsize = 8
+
+        if 'alpha' in kwargs:
+            alpha = kwargs.get('alpha')
+        else:
+            alpha = 1
+
+        if 'contour_levels' in kwargs:
+            contour_levels = kwargs.get('contour_levels')
+        else:
+            # contour_levels = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+            contour_levels = [0, 0.2, 0.5, 0.68, 0.95, 0.99]
+            # contour_levels = [0.68, 0.95]
+
+        good_1 = np.invert(np.isnan(x_data_1) | np.isnan(y_data_1))
+        good_2 = np.invert(np.isnan(x_data_2) | np.isnan(y_data_2))
+
+        k_1 = stats.gaussian_kde(np.vstack([x_data_1[good_1], y_data_1[good_1]]))
+
+        if ('x_lim_1' in kwargs) & ('y_lim_1' in kwargs):
+            x_lim_1 = kwargs.get('x_lim_1')
+            y_lim_1 = kwargs.get('y_lim_1')
+        else:
+            x_lim_1 = (x_data_1[good_1].min(), x_data_1[good_1].max())
+            y_lim_1 = (y_data_1[good_1].min(), y_data_1[good_1].max())
+        if 'size_1' in kwargs:
+            size_1 = kwargs.get('size_1')
+        else:
+            size_1 = x_data_1[good_1].size
+        xi_1, yi_1 = np.mgrid[x_lim_1[0]:x_lim_1[1]:size_1**0.5*1j,
+                              y_lim_1[0]:y_lim_1[1]:size_1**0.5*1j]
+
+        # xi_1, yi_1 = np.mgrid[x_data_1[good_1].min():x_data_1[good_1].max():x_data_1[good_1].size**0.5*1j,
+        #                       y_data_1[good_1].min():y_data_1[good_1].max():y_data_1[good_1].size**0.5*1j]
+
+        zi_1 = k_1(np.vstack([xi_1.flatten(), yi_1.flatten()]))
+
+        # set zi_1 to 0-1 scale
+        zi_1 = (zi_1-zi_1.min())/(zi_1.max() - zi_1.min())
+        zi_1 = zi_1.reshape(xi_1.shape)
+
+        cs_1 = ax.contour(xi_1, yi_1, zi_1, levels=contour_levels, colors=color_1, linewidths=linewidth, origin='lower',
+                          alpha=alpha)
+
+        if percent_1:
+            ax.clabel(cs_1, fmt='%.2f', colors=color_1, fontsize=fontsize)
+
+        k_2 = stats.gaussian_kde(np.vstack([x_data_2[good_2], y_data_2[good_2]]))
+
+        if ('x_lim_2' in kwargs) & ('y_lim_2' in kwargs):
+            x_lim_2 = kwargs.get('x_lim_2')
+            y_lim_2 = kwargs.get('y_lim_2')
+        else:
+            x_lim_2 = (x_data_2[good_2].min(), x_data_2[good_2].max())
+            y_lim_2 = (y_data_2[good_2].min(), y_data_2[good_2].max())
+        if 'size_2' in kwargs:
+            size_2 = kwargs.get('size_2')
+        else:
+            size_2 = x_data_2[good_2].size
+        xi_2, yi_2 = np.mgrid[x_lim_2[0]:x_lim_2[1]:size_2**0.5*1j,
+                              y_lim_2[0]:y_lim_2[1]:size_2**0.5*1j]
+        # xi_2, yi_2 = np.mgrid[x_data_2[good_2].min():x_data_2[good_2].max():x_data_2[good_2].size**0.5*1j,
+        #                       y_data_2[good_2].min():y_data_2[good_2].max():y_data_2[good_2].size**0.5*1j]
+
+        zi_2 = k_2(np.vstack([xi_2.flatten(), yi_2.flatten()]))
+
+        # set zi_2 to 0-1 scale
+        zi_2 = (zi_2-zi_2.min())/(zi_2.max() - zi_2.min())
+        zi_2 =zi_2.reshape(xi_2.shape)
+
+        cs_2 = ax.contour(xi_2, yi_2, zi_2, levels=contour_levels, colors=color_2, linewidths=linewidth, origin='lower',
+                          alpha=alpha)
+
+        if percent_2:
+            ax.clabel(cs_2, fmt='%.2f', colors=color_2, fontsize=fontsize)
+
+    @staticmethod
+    def get_three_contours_percentage(ax, x_data_1, y_data_1, x_data_2, y_data_2, x_data_3, y_data_3,
+                                      color_1='black', color_2='blue', color_3='red',
+                                      percent_1=True, percent_2=True, percent_3=True, **kwargs):
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs.get('linewidth')
+        else:
+            linewidth = 1.5
+
+        if 'fontsize' in kwargs:
+            fontsize = kwargs.get('fontsize')
+        else:
+            fontsize = 8
+
+        if 'alpha_1' in kwargs:
+            alpha_1 = kwargs.get('alpha_1')
+        else:
+            alpha_1 = 1
+
+        if 'alpha_2' in kwargs:
+            alpha_2 = kwargs.get('alpha_2')
+        else:
+            alpha_2 = 1
+
+        if 'alpha_3' in kwargs:
+            alpha_3 = kwargs.get('alpha_3')
+        else:
+            alpha_3 = 1
+
+        if 'contour_levels_1' in kwargs:
+            contour_levels_1 = kwargs.get('contour_levels_1')
+        else:
+            contour_levels_1 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+        if 'contour_levels_2' in kwargs:
+            contour_levels_2 = kwargs.get('contour_levels_2')
+        else:
+            contour_levels_2 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+        if 'contour_levels_3' in kwargs:
+            contour_levels_3 = kwargs.get('contour_levels_3')
+        else:
+            contour_levels_3 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+
+        k_1 = stats.gaussian_kde(np.vstack([x_data_1, y_data_1]))
+        xi_1, yi_1 = np.mgrid[x_data_1.min():x_data_1.max():x_data_1.size**0.5*1j,
+                              y_data_1.min():y_data_1.max():y_data_1.size**0.5*1j]
+
+        zi_1 = k_1(np.vstack([xi_1.flatten(), yi_1.flatten()]))
+
+        # set zi_1 to 0-1 scale
+        zi_1 = (zi_1-zi_1.min())/(zi_1.max() - zi_1.min())
+        zi_1 = zi_1.reshape(xi_1.shape)
+
+        cs_1 = ax.contour(xi_1, yi_1, zi_1, levels=contour_levels_1, colors=color_1, linewidths=linewidth, origin='lower',
+                          alpha=alpha_1)
+
+        if percent_1:
+            ax.clabel(cs_1, fmt='%.2f', colors=color_1, fontsize=fontsize)
+
+        k_2 = stats.gaussian_kde(np.vstack([x_data_2, y_data_2]))
+        xi_2, yi_2 = np.mgrid[x_data_2.min():x_data_2.max():x_data_2.size**0.5*1j,
+                              y_data_2.min():y_data_2.max():y_data_2.size**0.5*1j]
+
+        zi_2 = k_2(np.vstack([xi_2.flatten(), yi_2.flatten()]))
+
+        # set zi_2 to 0-1 scale
+        zi_2 = (zi_2-zi_2.min())/(zi_2.max() - zi_2.min())
+        zi_2 = zi_2.reshape(xi_2.shape)
+
+        cs_2 = ax.contour(xi_2, yi_2, zi_2, levels=contour_levels_2, colors=color_2, linewidths=linewidth, origin='lower',
+                          alpha=alpha_2)
+
+        if percent_2:
+            ax.clabel(cs_2, fmt='%.2f', colors=color_2, fontsize=fontsize)
+
+        k_3 = stats.gaussian_kde(np.vstack([x_data_3, y_data_3]))
+        xi_3, yi_3 = np.mgrid[x_data_3.min():x_data_3.max():x_data_3.size**0.5*1j,
+                              y_data_3.min():y_data_3.max():y_data_3.size**0.5*1j]
+
+        zi_3 = k_3(np.vstack([xi_3.flatten(), yi_3.flatten()]))
+
+        # set zi_3 to 0-1 scale
+        zi_3 = (zi_3-zi_3.min())/(zi_3.max() - zi_3.min())
+        zi_3 = zi_3.reshape(xi_3.shape)
+
+        cs_3 = ax.contour(xi_3, yi_3, zi_3, levels=contour_levels_3, colors=color_3, linewidths=linewidth, origin='lower',
+                          alpha=alpha_3)
+
+        if percent_3:
+            ax.clabel(cs_3, fmt='%.2f', colors=color_3, fontsize=fontsize)
+
+    @staticmethod
+    def get_four_contours_percentage(ax, x_data_1, y_data_1, x_data_2, y_data_2, x_data_3, y_data_3, x_data_4, y_data_4,
+                                      color_1='black', color_2='blue', color_3='m', color_4='c',
+                                      percent_1=True, percent_2=True, percent_3=True, percent_4=True, **kwargs):
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs.get('linewidth')
+        else:
+            linewidth = 1.5
+
+        if 'fontsize' in kwargs:
+            fontsize = kwargs.get('fontsize')
+        else:
+            fontsize = 8
+
+        if 'alpha_1' in kwargs:
+            alpha_1 = kwargs.get('alpha_1')
+        else:
+            alpha_1 = 1
+
+        if 'alpha_2' in kwargs:
+            alpha_2 = kwargs.get('alpha_2')
+        else:
+            alpha_2 = 1
+
+        if 'alpha_3' in kwargs:
+            alpha_3 = kwargs.get('alpha_3')
+        else:
+            alpha_3 = 1
+
+        if 'alpha_4' in kwargs:
+            alpha_4 = kwargs.get('alpha_4')
+        else:
+            alpha_4 = 1
+
+        if 'contour_levels_1' in kwargs:
+            contour_levels_1 = kwargs.get('contour_levels_1')
+        else:
+            contour_levels_1 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+        if 'contour_levels_2' in kwargs:
+            contour_levels_2 = kwargs.get('contour_levels_2')
+        else:
+            contour_levels_2 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+        if 'contour_levels_3' in kwargs:
+            contour_levels_3 = kwargs.get('contour_levels_3')
+        else:
+            contour_levels_3 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+
+        if 'contour_levels_4' in kwargs:
+            contour_levels_4 = kwargs.get('contour_levels_4')
+        else:
+            contour_levels_4 = [0, 0.1, 0.2, 0.5, 0.68, 0.95, 0.99]
+
+
+        k_1 = stats.gaussian_kde(np.vstack([x_data_1, y_data_1]))
+        xi_1, yi_1 = np.mgrid[x_data_1.min():x_data_1.max():x_data_1.size**0.5*1j,
+                              y_data_1.min():y_data_1.max():y_data_1.size**0.5*1j]
+
+        zi_1 = k_1(np.vstack([xi_1.flatten(), yi_1.flatten()]))
+
+        # set zi_1 to 0-1 scale
+        zi_1 = (zi_1-zi_1.min())/(zi_1.max() - zi_1.min())
+        zi_1 = zi_1.reshape(xi_1.shape)
+
+        cs_1 = ax.contour(xi_1, yi_1, zi_1, levels=contour_levels_1, colors=color_1, linewidths=linewidth, origin='lower',
+                          alpha=alpha_1)
+
+        if percent_1:
+            ax.clabel(cs_1, fmt='%.2f', colors=color_1, fontsize=fontsize)
+
+        k_2 = stats.gaussian_kde(np.vstack([x_data_2, y_data_2]))
+        xi_2, yi_2 = np.mgrid[x_data_2.min():x_data_2.max():x_data_2.size**0.5*1j,
+                              y_data_2.min():y_data_2.max():y_data_2.size**0.5*1j]
+
+        zi_2 = k_2(np.vstack([xi_2.flatten(), yi_2.flatten()]))
+
+        # set zi_2 to 0-1 scale
+        zi_2 = (zi_2-zi_2.min())/(zi_2.max() - zi_2.min())
+        zi_2 = zi_2.reshape(xi_2.shape)
+
+        cs_2 = ax.contour(xi_2, yi_2, zi_2, levels=contour_levels_2, colors=color_2, linewidths=linewidth, origin='lower',
+                          alpha=alpha_2)
+
+        if percent_2:
+            ax.clabel(cs_2, fmt='%.2f', colors=color_2, fontsize=fontsize)
+
+        k_3 = stats.gaussian_kde(np.vstack([x_data_3, y_data_3]))
+        xi_3, yi_3 = np.mgrid[x_data_3.min():x_data_3.max():x_data_3.size**0.5*1j,
+                              y_data_3.min():y_data_3.max():y_data_3.size**0.5*1j]
+
+        zi_3 = k_3(np.vstack([xi_3.flatten(), yi_3.flatten()]))
+
+        # set zi_3 to 0-1 scale
+        zi_3 = (zi_3-zi_3.min())/(zi_3.max() - zi_3.min())
+        zi_3 = zi_3.reshape(xi_3.shape)
+
+        cs_3 = ax.contour(xi_3, yi_3, zi_3, levels=contour_levels_3, colors=color_3, linewidths=linewidth, origin='lower',
+                          alpha=alpha_3)
+
+        if percent_3:
+            ax.clabel(cs_3, fmt='%.2f', colors=color_3, fontsize=fontsize)
+
+
+        k_4 = stats.gaussian_kde(np.vstack([x_data_4, y_data_4]))
+        xi_4, yi_4 = np.mgrid[x_data_4.min():x_data_4.max():x_data_4.size**0.5*1j,
+                              y_data_4.min():y_data_4.max():y_data_4.size**0.5*1j]
+
+        zi_4 = k_4(np.vstack([xi_4.flatten(), yi_4.flatten()]))
+
+        # set zi_4 to 0-1 scale
+        zi_4 = (zi_4-zi_4.min())/(zi_4.max() - zi_4.min())
+        zi_4 = zi_4.reshape(xi_4.shape)
+
+        cs_4 = ax.contour(xi_4, yi_4, zi_4, levels=contour_levels_4, colors=color_4, linewidths=linewidth, origin='lower',
+                          alpha=alpha_4)
+
+        if percent_4:
+            ax.clabel(cs_4, fmt='%.2f', colors=color_4, fontsize=fontsize)

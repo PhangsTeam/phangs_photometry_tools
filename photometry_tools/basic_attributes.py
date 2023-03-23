@@ -4,7 +4,7 @@ Classes to gather basic attributes such as folder names, observation statuses or
 # import matplotlib.pyplot as plt
 from scipy.signal import fftconvolve
 import numpy as np
-import tensorflow as tf
+# import tensorflow as tf
 
 from zfit import Parameter
 
@@ -17,9 +17,72 @@ class PhangsDataStructure:
     def __init__(self):
         super().__init__()
 
-        self.target_list = ['ngc0628', 'ngc7496', 'ngc1365']
+        self.phangs_galaxy_list = ['ic1954', 'ic5332', 'ngc0628', 'ngc0685', 'ngc1087', 'ngc1097', 'ngc1300', 'ngc1317',
+                                   'ngc1365', 'ngc1385', 'ngc1433', 'ngc1512', 'ngc1559', 'ngc1566', 'ngc1672',
+                                   'ngc1792', 'ngc2775', 'ngc2835', 'ngc2903', 'ngc3351', 'ngc3621', 'ngc3627',
+                                   'ngc4254', 'ngc4298', 'ngc4303', 'ngc4321', 'ngc4535', 'ngc4536', 'ngc4548',
+                                   'ngc4569', 'ngc4571', 'ngc4654', 'ngc4689', 'ngc4826', 'ngc5068', 'ngc5248',
+                                   'ngc6744', 'ngc7496']
 
-        self.target_observed_hst = ['ngc0628', 'ngc7496', 'ngc1365']
+        self.target_observed_hst = ['ic1954', 'ic5332', 'ngc0628', 'ngc0628e', 'ngc0628c', 'ngc0685', 'ngc1087',
+                                    'ngc1097', 'ngc1300', 'ngc1317', 'ngc1365', 'ngc1385', 'ngc1433', 'ngc1512',
+                                    'ngc1559', 'ngc1566', 'ngc1672', 'ngc1792', 'ngc2775', 'ngc2835', 'ngc2903',
+                                    'ngc3351', 'ngc3621', 'ngc3627', 'ngc4254', 'ngc4298', 'ngc4303', 'ngc4321',
+                                    'ngc4535', 'ngc4536', 'ngc4548', 'ngc4569', 'ngc4571', 'ngc4654', 'ngc4689',
+                                    'ngc4826', 'ngc5068', 'ngc5248', 'ngc6744', 'ngc7496']
+
+        self.target_hst_cc = ['ic1954', 'ic5332', 'ngc0628e', 'ngc0628c', 'ngc0685', 'ngc1087', 'ngc1097', 'ngc1300',
+                              'ngc1317', 'ngc1365', 'ngc1385', 'ngc1433', 'ngc1512', 'ngc1559', 'ngc1566', 'ngc1672',
+                              'ngc1792', 'ngc2775', 'ngc2835', 'ngc2903', 'ngc3351', 'ngc3621', 'ngc3627', 'ngc4254',
+                              'ngc4298', 'ngc4303', 'ngc4321', 'ngc4535', 'ngc4536', 'ngc4548', 'ngc4569', 'ngc4571',
+                              'ngc4654', 'ngc4689', 'ngc4826', 'ngc5068', 'ngc5248', 'ngc6744', 'ngc7496']
+
+        self.dist_dict = {
+            'ic1954': {'dist': 12.8, 'dist_err': 2.05, 'method': 'NAM+TF'},
+            'ic5332': {'dist': 9.01, 'dist_err': 0.41, 'method': 'TRGB'},
+            'ngc0628': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
+            'ngc0685': {'dist': 19.94, 'dist_err': 2.99, 'method': 'NAM'},
+            'ngc1087': {'dist': 15.85, 'dist_err': 2.24, 'method': 'Group'},
+            'ngc1097': {'dist': 13.58, 'dist_err': 2.04, 'method': 'NAM'},
+            'ngc1300': {'dist': 18.99, 'dist_err': 2.85, 'method': 'NAM'},
+            'ngc1317': {'dist': 19.11, 'dist_err': 0.84, 'method': 'Group'},
+            'ngc1365': {'dist': 19.57, 'dist_err': 0.78, 'method': 'TRGB'},
+            'ngc1385': {'dist': 17.22, 'dist_err': 2.58, 'method': 'NAM'},
+            'ngc1433': {'dist': 18.94, 'dist_err': 0.56, 'method': 'PNLF'},
+            'ngc1512': {'dist': 17.93, 'dist_err': 0.88, 'method': 'PNLF'},
+            'ngc1559': {'dist': 19.44, 'dist_err': 0.44, 'method': 'Mira'},
+            'ngc1566': {'dist': 17.69, 'dist_err': 2.00, 'method': 'Group'},
+            'ngc1672': {'dist': 19.40, 'dist_err': 2.91, 'method': 'NAM'},
+            'ngc1792': {'dist': 16.20, 'dist_err': 2.43, 'method': 'NAM'},
+            'ngc2775': {'dist': 23.15, 'dist_err': 3.47, 'method': 'NAM'},
+            'ngc2835': {'dist': 12.22, 'dist_err': 0.94, 'method': 'TRGB'},
+            'ngc2903': {'dist': 9.61, 'dist_err': 0.39, 'method': 'TRGB'},
+            'ngc3351': {'dist': 9.96, 'dist_err': 0.33, 'method': 'TRGB'},
+            'ngc3621': {'dist': 7.06, 'dist_err': 0.28, 'method': 'TRGB'},
+            'ngc3627': {'dist': 11.32, 'dist_err': 0.48, 'method': 'TRGB'},
+            'ngc4254': {'dist': 13.1, 'dist_err': 2.8, 'method': 'SCM'},
+            'ngc4298': {'dist': 14.92, 'dist_err': 1.37, 'method': 'TRGB'},
+            'ngc4303': {'dist': 16.99, 'dist_err': 3.04, 'method': 'Group'},
+            'ngc4321': {'dist': 15.21, 'dist_err': 0.49, 'method': 'Cepheid'},
+            'ngc4535': {'dist': 15.77, 'dist_err': 0.37, 'method': 'Cepheid'},
+            'ngc4536': {'dist': 16.25, 'dist_err': 1.13, 'method': 'TRGB'},
+            'ngc4548': {'dist': 16.22, 'dist_err': 0.38, 'method': 'Cepheid'},
+            'ngc4569': {'dist': 15.76, 'dist_err': 2.36, 'method': 'Group'},
+            'ngc4571': {'dist': 14.9, 'dist_err': 1., 'method': 'Cepheid'},
+            'ngc4654': {'dist': 21.98, 'dist_err': 1.16, 'method': 'Group'},
+            'ngc4689': {'dist': 15.0, 'dist_err': 2.25, 'method': 'NAM+TF'},
+            'ngc4826': {'dist': 4.41, 'dist_err': 0.19, 'method': 'TRGB'},
+            'ngc5068': {'dist': 5.20, 'dist_err': 0.21, 'method': 'TRGB'},
+            'ngc5248': {'dist': 14.87, 'dist_err': 1.34, 'method': 'Group'},
+            'ngc6744': {'dist': 9.39, 'dist_err': 0.43, 'method': 'TRGB'},
+            'ngc7496': {'dist': 18.72, 'dist_err': 2.81, 'method': 'NAM'}
+        }
+
+
+
+
+
+
         self.target_observed_nircam = ['ngc0628', 'ngc7496', 'ngc1365']
         self.target_observed_miri = ['ngc0628', 'ngc7496', 'ngc1365']
 
@@ -32,15 +95,164 @@ class PhangsDataStructure:
                 {'folder_name': 'ngc628mosaic',
                  'acs_wfc1_observed_bands': ['F435W', 'F814W'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
-            'ngc7496':
-                {'folder_name': 'ngc7496',
+            'ngc0628e':
+                {'folder_name': 'ngc628mosaic',
+                 'acs_wfc1_observed_bands': ['F435W', 'F814W'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
+            'ngc0628c':
+                {'folder_name': 'ngc628mosaic',
+                 'acs_wfc1_observed_bands': ['F435W', 'F555W', 'F658N', 'F814W'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W']},
+            'ngc0685':
+                {'folder_name': 'ngc685',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1087':
+                {'folder_name': 'ngc1087',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1097':
+                {'folder_name': 'ngc1097mosaic',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F547M', 'F555W', 'F657N', 'F814W']},
+            'ngc1300':
+                {'folder_name': 'ngc1300mosaic',
+                 'acs_wfc1_observed_bands': ['F435W', 'F555W', 'F658N', 'F814W'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W']},
+            'ngc1317':
+                {'folder_name': 'ngc1317',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ic1954':
+                {'folder_name': 'ic1954',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc1365':
                 {'folder_name': 'ngc1365',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1385':
+                {'folder_name': 'ngc1385',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1433':
+                {'folder_name': 'ngc1433',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1512':
+                {'folder_name': 'ngc1512',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1559':
+                {'folder_name': 'ngc1559',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1566':
+                {'folder_name': 'ngc1566',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc1672':
+                {'folder_name': 'ngc1672',
+                 'acs_wfc1_observed_bands': ['F555W', 'F435W', 'F550M', 'F658N'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
+            'ngc1792':
+                {'folder_name': 'ngc1792',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc2775':
+                {'folder_name': 'ngc2775',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc2835':
+                {'folder_name': 'ngc2835',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc2903':
+                {'folder_name': 'ngc2903',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc3351':
+                {'folder_name': 'ngc3351',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F547M', 'F555W', 'F657N', 'F814W']},
+            'ngc3621':
+                {'folder_name': 'ngc3621',
+                 'acs_wfc1_observed_bands': ['F435W', 'F555W', 'F814W'],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W']},
+            'ngc3627':
+                {'folder_name': 'ngc3627',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4254':
+                {'folder_name': 'ngc4254',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4298':
+                {'folder_name': 'ngc4298',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4303':
+                {'folder_name': 'ngc4303',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4321':
+                {'folder_name': 'ngc4321',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4535':
+                {'folder_name': 'ngc4535',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4536':
+                {'folder_name': 'ngc4536',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4548':
+                {'folder_name': 'ngc4548',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4569':
+                {'folder_name': 'ngc4569',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4571':
+                {'folder_name': 'ngc4571',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4654':
+                {'folder_name': 'ngc4654',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4689':
+                {'folder_name': 'ngc4689',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc4826':
+                {'folder_name': 'ngc4826',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc5068':
+                {'folder_name': 'ngc5068',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc5248':
+                {'folder_name': 'ngc5248',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ngc6744':
+                {'folder_name': 'ngc6744',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F547M', 'F555W', 'F657N', 'F814W']},
+            'ngc7496':
+                {'folder_name': 'ngc7496',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
+            'ic5332':
+                {'folder_name': 'ic5332',
+                 'acs_wfc1_observed_bands': [],
+                 'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
         }
+
         self.nircam_targets = {
             'ngc0628':
                 {'folder_name': 'ngc0628',
@@ -439,6 +651,7 @@ class FitModels:
         self.zfit_n_pnt = 0
         self.n_total_sources = 0
         self.zfit_current_band = None
+        self.fit_region_mask = None
 
     @staticmethod
     def gauss2d_rot(x, y, amp, x0, y0, sig_x, sig_y, theta):
@@ -598,7 +811,7 @@ class FitModels:
             returns the mean chi^2 value
         """
         squared = ((model_predict - self.current_img_data) / self.current_img_err) ** 2
-        return np.sum(squared)
+        return np.sum(squared[self.fit_region_mask])
 
     def prediction_func_old(self, params, n_gauss, n_pnt, band):
 
@@ -654,14 +867,14 @@ class FitModels:
             self, 'predict_func_%s' % band, lambda params:
             self.prediction_func_old(band=band, n_gauss=n_gauss, n_pnt=n_pnt, params=params))
 
-    def init_zfit_models(self, band, img_x_grid, img_y_gird, img_data, img_err, n_gauss, n_pnt):
+    def init_zfit_models(self, band, img_x_grid, img_y_grid, img_data, img_err, n_gauss, n_pnt, fit_rad_pix=None):
 
         # initiate fit functions
         self.zfit_current_band = band
 
         # initiate data
         self.current_img_x_grid = img_x_grid
-        self.current_img_y_grid = img_y_gird
+        self.current_img_y_grid = img_y_grid
         self.current_img_data = img_data
         self.current_img_err = img_err
         self.zfit_n_gauss = n_gauss
@@ -674,6 +887,13 @@ class FitModels:
         if self.zfit_n_pnt > 0:
             if not hasattr(self, 'pnt_src_sig_conv_%s' % self.zfit_current_band):
                 self.add_pnt_sig_src_model_band_conv(band=self.zfit_current_band)
+
+        if fit_rad_pix is None:
+            self.fit_region_mask = np.ones(self.current_img_data.shape, dtype=bool)
+        else:
+            x_centre = img_data.shape[0]/2
+            y_centre = img_data.shape[1]/2
+            self.fit_region_mask = np.sqrt((img_x_grid - x_centre)**2 + (img_y_grid - y_centre)**2) < fit_rad_pix
 
     def squared_loss(self, params):
 

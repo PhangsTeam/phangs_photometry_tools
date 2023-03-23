@@ -22,7 +22,7 @@ except (ImportError, ModuleNotFoundError) as err:
     print('zfit was not imported. Deblending functions are therefore not available')
 
 
-class AnalysisTools(data_access.DataAccess):
+class AnalysisTools(data_access.PhotAccess):
     """
     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
     """
@@ -286,7 +286,7 @@ class AnalysisTools(data_access.DataAccess):
         return source_table
 
     @staticmethod
-    def get_sep_init_src_guess(data_sub, rms, psf, snr=3.0, minarea=2, deblend_cont=0.00001):
+    def get_sep_init_src_guess(data_sub, rms, psf, detect_rad=None, snr=3.0, minarea=2, deblend_cont=0.00001):
         """
         To get a better detection of crowded sources and blended sources we significantly increase the contrast
         We also use a minimum area of 2 because we want to be able to select point sources
@@ -299,6 +299,8 @@ class AnalysisTools(data_access.DataAccess):
         rms : float or``numpy.ndarray``
             RMS of the data
         psf : ``numpy.ndarray``
+        detect_rad : float
+            radius in which sources are considered. If None all sources are considered
         snr : float
         minarea : int
             minimum area of the sources
@@ -314,12 +316,19 @@ class AnalysisTools(data_access.DataAccess):
         sep_table = sep.extract(data=data_sub, thresh=snr, err=rms, filter_kernel=psf, minarea=minarea,
                                 filter_type='conv', deblend_cont=deblend_cont)
 
+        if detect_rad is None:
+            select_mask = np.ones(len(sep_table['x']), dtype=bool)
+        else:
+            central_x_pos = data_sub.shape[0]/2
+            central_y_pos = data_sub.shape[1]/2
+            select_mask = np.sqrt((sep_table['x'] - central_x_pos) ** 2 + (sep_table['y'] - central_y_pos) ** 2) < detect_rad
+
         sep_source_dict = {
-            'x': sep_table['x'],
-            'y': sep_table['y'],
-            'a': sep_table['a'],
-            'b': sep_table['b'],
-            'theta': sep_table['theta']}
+            'x': sep_table['x'][select_mask],
+            'y': sep_table['y'][select_mask],
+            'a': sep_table['a'][select_mask],
+            'b': sep_table['b'][select_mask],
+            'theta': sep_table['theta'][select_mask]}
 
         return sep_source_dict
 
@@ -894,8 +903,6 @@ class AnalysisTools(data_access.DataAccess):
 
         return param_restrict_dict_pnt
 
-
-
     def zfit_gauss_src_param_dict_from_fit_old(self, amp, x0, y0, sig_x, sig_y, theta,
                                            amp_err, x0_err, y0_err, sig_x_err, sig_y_err, theta_err,
                                            src_name, src_blend,
@@ -1355,8 +1362,9 @@ class AnalysisTools(data_access.DataAccess):
                 print('x_sources ', x_sources)
                 dist_to_gauss_cand[objects_in_ell] = np.sqrt((pnt_src_x[objects_in_ell] - x_sources)**2 +
                                                              (pnt_src_y[objects_in_ell] - y_sources)**2)
-                pos_x0_of_gauss_cand[objects_in_ell] = np.mean([pnt_src_x[objects_in_ell], x_sources])
-                pos_y0_of_gauss_cand[objects_in_ell] = np.mean([pnt_src_y[objects_in_ell], y_sources])
+
+                pos_x0_of_gauss_cand[objects_in_ell] = np.mean([*pnt_src_x[objects_in_ell], x_sources])
+                pos_y0_of_gauss_cand[objects_in_ell] = np.mean([*pnt_src_y[objects_in_ell], y_sources])
             elif sum(objects_in_ell) > 1:
                 # multiple old point sources are matching with a new source.
                 # we will only take the closest!
@@ -1389,25 +1397,35 @@ class AnalysisTools(data_access.DataAccess):
 
         return return_dict
 
-    def generate_new_init_zfit_model(self, data_sub, psf, fit_result_dict, band, wcs, sig_ref, min_sig_fact,
-                                     max_sig_fact, max_amp_fact, fit_iter_index, pos_var, gauss_detect_rad):
+    def generate_new_init_zfit_model(self, data_sub, psf, fit_result_dict, band, wcs, fit_rad, sig_ref, min_sig_fact,
+                                     max_sig_fact, max_amp_fact, fit_iter_index, pos_var, gauss_detect_rad, init_snr=5):
         # if additional iterations will take place:
         # find sources in residuals
         new_bkg = sep.Background(np.array((data_sub - fit_result_dict['best_fit']), dtype=float))
-        new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
-                                                          rms=new_bkg.globalrms, psf=psf)
-        # when no source was detected just decrease the S/N and the minarea
-        if len(new_sep_source_dict['x']) == 0:
-            for snr in [4.5, 4.0, 3.5, 3.0, 2.5, 2.0, 1.5, 1.0]:
-                new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
-                                                                  rms=new_bkg.globalrms, psf=psf, snr=snr)
-                if len(new_sep_source_dict['x']) != 0:
-                    break
-        if len(new_sep_source_dict['x']) == 0:
-            new_sep_source_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
-                                                              rms=new_bkg.globalrms, psf=psf, snr=2.0, minarea=1)
+        fit_rad_pix = helper_func.transform_world2pix_scale(length_in_arcsec=fit_rad, wcs=wcs, dim=0)
+        new_sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
+                                                       rms=new_bkg.globalrms, psf=psf, detect_rad=fit_rad_pix,
+                                                       snr=init_snr)
 
-        if len(new_sep_source_dict['x']) == 0:
+        # when no source was detected just decrease the S/N and the minarea
+        loop_snr_list = np.linspace(init_snr, init_snr/10, 10)
+        if len(new_sep_src_dict['x']) == 0:
+            for snr in loop_snr_list:
+                print('snr ', snr)
+                new_sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
+                                                               rms=new_bkg.globalrms, psf=psf, detect_rad=fit_rad_pix,
+                                                               snr=snr)
+                if len(new_sep_src_dict['x']) != 0:
+                    break
+        if len(new_sep_src_dict['x']) == 0:
+            for snr in loop_snr_list:
+                new_sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub - fit_result_dict['best_fit'],
+                                                               rms=new_bkg.globalrms, psf=psf, detect_rad=fit_rad_pix,
+                                                               snr=snr, deblend_cont=0.000001, minarea=1)
+                if len(new_sep_src_dict['x']) != 0:
+                    break
+
+        if len(new_sep_src_dict['x']) == 0:
             new_srcs_found = False
         else:
             new_srcs_found = True
@@ -1432,7 +1450,7 @@ class AnalysisTools(data_access.DataAccess):
                                                     pnt_src_y=fit_result_dict['param_dict_pnt_pix_scale']['y0_pnt'],
                                                     gauss_src_x=fit_result_dict['param_dict_gauss_pix_scale']['x0_gauss'],
                                                     gauss_src_y=fit_result_dict['param_dict_gauss_pix_scale']['y0_gauss'],
-                                                    new_source_table=new_sep_source_dict, dist_to_ellipse=3,
+                                                    new_source_table=new_sep_src_dict, dist_to_ellipse=3,
                                                     gauss_detect_rad=gauss_detect_rad, influenz_rad=psf_pix_rad)
 
         print('gauss_cand ', source_eval_dict['gauss_cand'])
@@ -1453,17 +1471,17 @@ class AnalysisTools(data_access.DataAccess):
         # add new point sources
         new_zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict(
             amp=np.max(data_sub) * 5, x0=source_eval_dict['new_pnt_src_dict']['x'],
-            y0=source_eval_dict['new_pnt_src_dict']['y'], sig=sig_ref, fix=False,
+            y0=source_eval_dict['new_pnt_src_dict']['y'], sig=np.array(source_eval_dict['new_pnt_src_dict']['b']), fix=False,
             lower_sig=sig_ref*min_sig_fact, upper_sig=sig_ref*max_sig_fact,
             lower_amp=np.max(data_sub)/max_amp_fact, upper_amp=np.max(data_sub)*max_amp_fact,
-            lower_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) -
-                      np.array(source_eval_dict['new_pnt_src_dict']['a'])*3 - pos_var),
-            upper_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) +
-                      np.array(source_eval_dict['new_pnt_src_dict']['a'])*3 + pos_var),
-            lower_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) -
-                      np.array(source_eval_dict['new_pnt_src_dict']['a'])*3 - pos_var),
-            upper_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) +
-                      np.array(source_eval_dict['new_pnt_src_dict']['a'])*3 + pos_var),
+            lower_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) - pos_var),# -
+                      #np.array(source_eval_dict['new_pnt_src_dict']['a'])*3),
+            upper_x0=(np.array(source_eval_dict['new_pnt_src_dict']['x']) + pos_var),# +
+                      #np.array(source_eval_dict['new_pnt_src_dict']['a'])*3),
+            lower_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) - pos_var),# -
+                      #np.array(source_eval_dict['new_pnt_src_dict']['a'])*3),
+            upper_y0=(np.array(source_eval_dict['new_pnt_src_dict']['y']) + pos_var),# +
+                      #np.array(source_eval_dict['new_pnt_src_dict']['a'])*3),
             starting_index=zfit_param_restrict_dict_pnt['n_src_pnt'])
 
         n_src_pnt = zfit_param_restrict_dict_pnt['n_src_pnt'] + new_zfit_param_restrict_dict_pnt['n_src_pnt']
@@ -1529,16 +1547,16 @@ class AnalysisTools(data_access.DataAccess):
             y = zfit_param_restrict_dict_gauss['gauss_%i' % index_gauss]['init_y0']
             ax[0].scatter(x, y, s=8, color='g')
 
-        for i in range(len(new_sep_source_dict['x'])):
-            e = Ellipse(xy=(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i]),
-                        width=new_sep_source_dict['a'][i] * 3,
-                        height=new_sep_source_dict['b'][i] * 3,
-                        angle=new_sep_source_dict['theta'][i] * 180 / np.pi)
+        for i in range(len(new_sep_src_dict['x'])):
+            e = Ellipse(xy=(new_sep_src_dict['x'][i], new_sep_src_dict['y'][i]),
+                        width=new_sep_src_dict['a'][i] * 3,
+                        height=new_sep_src_dict['b'][i] * 3,
+                        angle=new_sep_src_dict['theta'][i] * 180 / np.pi)
             e.set_facecolor('none')
             e.set_edgecolor('red')
             e.set_linewidth(1)
             ax[0].add_artist(e)
-            ax[0].text(new_sep_source_dict['x'][i], new_sep_source_dict['y'][i], '%i' % i)
+            ax[0].text(new_sep_src_dict['x'][i], new_sep_src_dict['y'][i], '%i' % i)
 
         # plt.show()
         # plt.clf()
@@ -1593,7 +1611,7 @@ class AnalysisTools(data_access.DataAccess):
 
         return param_dict_pnt_wcs_scale, param_dict_gauss_wcs_scale
 
-    def get_init_guess_from_other_band(self, init_src_dict, wcs, pix_accuracy, data_sub,
+    def get_init_guess_from_other_band(self, init_src_dict, wcs, src_combine_accuracy_pix, data_sub,
                                        sig_ref, min_sig_fact, max_sig_fact, max_amp_fact, pos_var, init_gauss):
 
         self.n_total_sources = init_src_dict['n_total_sources']
@@ -1692,7 +1710,7 @@ class AnalysisTools(data_access.DataAccess):
         for index in range(len(x0_pnt)):
             dist = np.sqrt((x0_pnt - x0_pnt[index]) ** 2 + (y0_pnt - y0_pnt[index]) ** 2)
             # get all objects near the
-            index_close_neighbours = np.where((dist < pix_accuracy) & (dist != 0))
+            index_close_neighbours = np.where((dist < src_combine_accuracy_pix) & (dist != 0))
             # get only the closest
             print('index ', index, 'index_close_neighbours ', index_close_neighbours)
             if len(index_close_neighbours[0]) == 0:
@@ -1700,6 +1718,8 @@ class AnalysisTools(data_access.DataAccess):
             smallest_dist = np.min(dist[index_close_neighbours])
             index_smallest_dist = np.where(dist == smallest_dist)
             print('smallest_dist ', smallest_dist, 'index_smallest_dist ', index_smallest_dist)
+            if len(index_smallest_dist[0]) > 1:
+                index_smallest_dist = index_smallest_dist[0][0]
 
             name_closest_src_pnt[index] = src_name_pnt[index_smallest_dist]
 
@@ -1775,10 +1795,10 @@ class AnalysisTools(data_access.DataAccess):
             amp=np.max(data_sub)*5, x0=new_x0_pnt, y0=new_y0_pnt, sig=sig_ref, fix=False,
             lower_sig=sig_ref*min_sig_fact, upper_sig=sig_ref*max_sig_fact,
             lower_amp=np.max(data_sub)/max_amp_fact, upper_amp=np.max(data_sub)*max_amp_fact,
-            lower_x0=new_x0_pnt - pix_accuracy - pos_var,
-            upper_x0=new_x0_pnt + pix_accuracy + pos_var,
-            lower_y0=new_y0_pnt - pix_accuracy - pos_var,
-            upper_y0=new_y0_pnt + pix_accuracy + pos_var,
+            lower_x0=new_x0_pnt - src_combine_accuracy_pix - pos_var,
+            upper_x0=new_x0_pnt + src_combine_accuracy_pix + pos_var,
+            lower_y0=new_y0_pnt - src_combine_accuracy_pix - pos_var,
+            upper_y0=new_y0_pnt + src_combine_accuracy_pix + pos_var,
             starting_index=0)
 
         lower_sig = sig_ref*min_sig_fact
@@ -1793,20 +1813,21 @@ class AnalysisTools(data_access.DataAccess):
             sig_x=sig_x_guess, sig_y=sig_y_guess, theta=theta_gauss, src_name=src_name_gauss, src_blend=src_blend_gauss,
             fix=False,
             lower_amp=np.max(data_sub)/max_amp_fact, upper_amp=np.max(data_sub)*max_amp_fact,
-            lower_x0=x0_gauss - pix_accuracy - pos_var, upper_x0=x0_gauss + pix_accuracy + pos_var,
-            lower_y0=y0_gauss - pix_accuracy - pos_var, upper_y0=y0_gauss + pix_accuracy + pos_var,
+            lower_x0=x0_gauss - src_combine_accuracy_pix - pos_var, upper_x0=x0_gauss + src_combine_accuracy_pix + pos_var,
+            lower_y0=y0_gauss - src_combine_accuracy_pix - pos_var, upper_y0=y0_gauss + src_combine_accuracy_pix + pos_var,
             lower_sig_x=lower_sig, upper_sig_x=upper_sig, lower_sig_y=lower_sig, upper_sig_y=upper_sig,
             lower_theta=-np.pi/2, upper_theta=np.pi/2, starting_index=0)
 
         return zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss
 
     def zfit_model2data(self, band, x_grid, y_grid, data_sub, err, zfit_param_restrict_dict_pnt,
-                        zfit_param_restrict_dict_gauss, index_iter, wcs):
+                        zfit_param_restrict_dict_gauss, index_iter, wcs, fit_rad):
 
         # init fit model
-        self.init_zfit_models(band=band, img_x_grid=x_grid, img_y_gird=y_grid, img_data=data_sub, img_err=err,
+        fit_rad_pix = helper_func.transform_world2pix_scale(length_in_arcsec=fit_rad, wcs=wcs, dim=0)
+        self.init_zfit_models(band=band, img_x_grid=x_grid, img_y_grid=y_grid, img_data=data_sub, img_err=err,
                               n_pnt=zfit_param_restrict_dict_pnt['n_src_pnt'],
-                              n_gauss=zfit_param_restrict_dict_gauss['n_src_gauss'])
+                              n_gauss=zfit_param_restrict_dict_gauss['n_src_gauss'], fit_rad_pix=fit_rad_pix)
         # create init zfit parameters
         print('zfit_param_restrict_dict_pnt ', zfit_param_restrict_dict_pnt)
 
@@ -1875,7 +1896,7 @@ class AnalysisTools(data_access.DataAccess):
         return fit_result_dict
 
     def zfit_iter_de_blend(self, band, ra, dec, cutout_size, init_src_dict=None, n_iter=2,
-                           pix_accuracy=1.5, sig_ref=0.5, min_sig_fact=0.1, max_sig_fact=20, max_amp_fact=1e5, pos_var=4,
+                           src_combine_accuracy_pix=1.5, sig_ref=0.5, min_sig_fact=0.1, max_sig_fact=20, max_amp_fact=1e5, pos_var=4,
                            gauss_detect_rad=0, init_gauss=True):
 
         # prepare all data
@@ -1914,7 +1935,7 @@ class AnalysisTools(data_access.DataAccess):
         else:
             # if from a previous fit parameters are known parameters will be transformed
             zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss = \
-                self.get_init_guess_from_other_band(init_src_dict=init_src_dict, wcs=wcs, pix_accuracy=pix_accuracy,
+                self.get_init_guess_from_other_band(init_src_dict=init_src_dict, wcs=wcs, src_combine_accuracy_pix=src_combine_accuracy_pix,
                                                     data_sub=data_sub,  sig_ref=sig_ref, min_sig_fact=min_sig_fact,
                                                     max_sig_fact=max_sig_fact, max_amp_fact=max_amp_fact,
                                                     pos_var=pos_var, init_gauss=init_gauss)
@@ -1936,6 +1957,79 @@ class AnalysisTools(data_access.DataAccess):
                                                   band=band, wcs=wcs,
                                                   sig_ref=sig_ref, min_sig_fact=min_sig_fact, max_sig_fact=max_sig_fact,
                                                   max_amp_fact=max_amp_fact, fit_iter_index=fit_iter_index, pos_var=pos_var, gauss_detect_rad=gauss_detect_rad)
+
+            if not new_srcs_found:
+                break
+
+        return iterative_fit_result_dict
+
+    def src_deblend(self, band, ra, dec, cutout_size, fit_rad=0.3, init_src_dict=None, n_iter=2,
+                    pos_var=3, sig_ref=0.5, min_sig_fact=0.1, max_sig_fact=20, max_amp_fact=1e5,
+                    src_combine_accuracy_pix=1.5,
+                    gauss_detect_rad=4, init_gauss=True, init_snr=5):
+
+        # prepare all data
+        # get cutout
+        cutout_dict = self.get_band_cutout_dict(ra_cutout=ra, dec_cutout=dec, cutout_size=cutout_size, band_list=[band],
+                                                include_err=True)
+        # get WCS, data, uncertainties and psf
+        data = np.array(cutout_dict['%s_img_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        err = np.array(cutout_dict['%s_err_cutout' % band].data.byteswap().newbyteorder(), dtype=float)
+        psf = np.array(self.small_psf_dict['native_psf_%s' % band].byteswap().newbyteorder(), dtype=float)
+        # calculate the background
+        bkg = sep.Background(np.array(data, dtype=float))
+        # data subtracted from a global background estimation
+        data_sub = data - bkg.globalback
+        # get the WCS
+        wcs = cutout_dict['%s_img_cutout' % band].wcs
+        # get data grid
+        x_grid, y_grid = helper_func.create_2d_data_mesh(data=data)
+
+        # get initial fitting parameters
+        if init_src_dict is None:
+            # only consider sources inside the radius of interest
+            fit_rad_pix = helper_func.transform_world2pix_scale(length_in_arcsec=fit_rad, wcs=wcs, dim=0)
+            # create SEP object table using standard parameters
+            sep_src_dict = self.get_sep_init_src_guess(data_sub=data_sub, rms=bkg.globalrms, psf=psf, detect_rad=fit_rad_pix, snr=init_snr)
+
+            # init parameters for point sources. note that `a´ is the major axis of the elliptical sources
+            zfit_param_restrict_dict_pnt = self.zfit_pnt_src_param_dict(
+                amp=np.max(data_sub) * 5, x0=sep_src_dict['x'], y0=sep_src_dict['y'], sig=np.array(sep_src_dict['b']), fix=False,
+                lower_sig=sig_ref * min_sig_fact, upper_sig=sig_ref * max_sig_fact,
+                lower_amp=np.max(data_sub)/max_amp_fact, upper_amp=np.max(data_sub) * max_amp_fact,
+                lower_x0=np.array(sep_src_dict['x']) - pos_var,# - np.array(sep_src_dict['b'])*3,
+                upper_x0=np.array(sep_src_dict['x']) + pos_var,# + np.array(sep_src_dict['b'])*3,
+                lower_y0=np.array(sep_src_dict['y']) - pos_var,# - np.array(sep_src_dict['b'])*3,
+                upper_y0=np.array(sep_src_dict['y']) + pos_var,# + np.array(sep_src_dict['b'])*3
+            )
+            # no gaussian sources for initial guess
+            zfit_param_restrict_dict_gauss = {'n_src_gauss': 0}
+        else:
+            # if from a previous fit parameters are known parameters will be transformed
+            zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss = \
+                self.get_init_guess_from_other_band(init_src_dict=init_src_dict, wcs=wcs, src_combine_accuracy_pix=src_combine_accuracy_pix,
+                                                    data_sub=data_sub,  sig_ref=sig_ref, min_sig_fact=min_sig_fact,
+                                                    max_sig_fact=max_sig_fact, max_amp_fact=max_amp_fact,
+                                                    pos_var=pos_var, init_gauss=init_gauss)
+
+        iterative_fit_result_dict = {}
+
+        # iterative fitting
+        for fit_iter_index in range(n_iter):
+            fit_result_dict = self.zfit_model2data(band=band, x_grid=x_grid, y_grid=y_grid, data_sub=data_sub, err=err,
+                                                   zfit_param_restrict_dict_pnt=zfit_param_restrict_dict_pnt,
+                                                   zfit_param_restrict_dict_gauss=zfit_param_restrict_dict_gauss,
+                                                   index_iter=fit_iter_index, wcs=wcs, fit_rad=fit_rad)
+
+            iterative_fit_result_dict.update({'fit_results_band_%s_iter_%i' % (band, fit_iter_index): fit_result_dict})
+            iterative_fit_result_dict.update({'last_iter_index': fit_iter_index})
+
+            zfit_param_restrict_dict_pnt, zfit_param_restrict_dict_gauss, new_srcs_found = \
+                self.generate_new_init_zfit_model(data_sub=data_sub, psf=psf, fit_result_dict=fit_result_dict,
+                                                  band=band, wcs=wcs, fit_rad=fit_rad,
+                                                  sig_ref=sig_ref, min_sig_fact=min_sig_fact, max_sig_fact=max_sig_fact,
+                                                  max_amp_fact=max_amp_fact, fit_iter_index=fit_iter_index,
+                                                  pos_var=pos_var, gauss_detect_rad=gauss_detect_rad, init_snr=init_snr)
 
             if not new_srcs_found:
                 break

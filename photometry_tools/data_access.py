@@ -1,17 +1,23 @@
 """
 Construct a data access structure for HST and JWST imaging data
 """
+import os.path
+
+import matplotlib.pyplot as plt
 import numpy as np
+from pandas import read_csv
 from scipy.constants import c as speed_of_light
 from pathlib import Path
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from astropy.io import fits
+from astropy.wcs import WCS
+import copy
 
 from photometry_tools import basic_attributes, helper_func
 
 
-class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysParams, basic_attributes.FitModels):
+class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysParams, basic_attributes.FitModels):
     """
     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
     """
@@ -38,7 +44,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         self.nircam_data_path = Path(nircam_data_path)
         self.miri_data_path = Path(miri_data_path)
         self.target_name = target_name
-        if (self.target_name not in self.target_list) & (self.target_name is not None):
+        if (self.target_name not in self.phangs_galaxy_list) & (self.target_name is not None):
             raise AttributeError('The target %s is not in the PHANGS photometric sample or has not been added to '
                                  'the current package version' % self.target_name)
 
@@ -244,6 +250,7 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             err_data, err_header, err_wcs = helper_func.load_img(file_name=err_file_name)
             err_data = 1 / np.sqrt(err_data)
             err_data *= conversion_factor
+
             self.hst_bands_data.update({'%s_data_err' % band: err_data, '%s_header_err' % band: err_header,
                                         '%s_wcs_err' % band: err_wcs, '%s_unit_err' % band: flux_unit,
                                         '%s_pixel_area_size_sr_err' % band: pixel_area_size_sr})
@@ -740,79 +747,402 @@ class DataAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         return list(np.array(band_list)[sort])
 
 
+class CatalogAccess(basic_attributes.PhangsDataStructure):
+    """
+    Access class to organize data structure of all kinds of data tables/catalogs
+    """
 
-    def create_cigale_flux_file(self, file_path, band_list, aperture_dict_list, snr=3, name_list=None,
-                                redshift_list=None, dist_list=None):
+    def __init__(self, hst_cc_data_path=None, hst_obs_hdr_file_path=None, hst_cc_ver='IR4', morph_mask_path=None,
+                 morph_mask_ver='v5'):
+        """
 
-        if isinstance(aperture_dict_list, dict):
-            aperture_dict_list = [aperture_dict_list]
+        """
+        self.hst_cc_data_path = hst_cc_data_path
+        self.hst_obs_hdr_file_path = hst_obs_hdr_file_path
+        self.hst_cc_ver = hst_cc_ver
 
-        if name_list is None:
-            name_list = np.arange(start=0,  stop=len(aperture_dict_list)+1)
-        if redshift_list is None:
-            redshift_list = [0.0] * len(aperture_dict_list)
-        if dist_list is None:
-            dist_list = [self.dist_dict[self.target_name]['dist']] * len(aperture_dict_list)
+        self.hst_cc_data = {}
 
-        name_list = np.array(name_list, dtype=str)
-        redshift_list = np.array(redshift_list)
-        dist_list = np.array(dist_list)
+        self.morph_mask_path = morph_mask_path
+        self.morph_mask_ver = morph_mask_ver
+        self.morph_mask_data = {}
+
+        super().__init__()
+
+    def load_hst_cc_catalog(self, target, classify='human', cluster_class='class12'):
+
+        cluster_dict_path = Path(self.hst_cc_data_path) / Path(self.hst_cc_ver) / Path(cluster_class)
+
+        if (target[0:3] == 'ngc') & (target[3] == '0'):
+            target_string = target[0:3] + target[4:]
+        else:
+            target_string = target
+
+        file_path = cluster_dict_path / Path('PHANGS_%s_%s_phangs_hst_v1p2_%s_%s.fits' % (self.hst_cc_ver, target_string, classify, cluster_class))
+
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError('there is no HST cluster catalog for the target ', target,
+                                    ' make sure that the file ', file_path, ' exists')
+
+        return fits.open(file_path)[1].data
+
+    def load_hst_cc_list(self, target_list=None, classify='human', cluster_class='class12'):
+        if target_list is None:
+            target_list = self.target_hst_cc
+
+        for target in target_list:
+            cluster_catalog = self.load_hst_cc_catalog(target=target, classify=classify, cluster_class=cluster_class)
+            self.hst_cc_data.update({str(target) + '_' + classify + '_' + cluster_class: cluster_catalog})
+
+    def get_hst_cc_phangs_id(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['ID_PHANGS_CLUSTERS']
+
+    def get_hst_cc_coords_pix(self, target, classify='human', cluster_class='class12'):
+        x = self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_X']
+        y = self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_Y']
+        return x, y
+
+    def get_hst_cc_coords_world(self, target, classify='human', cluster_class='class12'):
+        ra = self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_RA']
+        dec = self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_DEC']
+        return ra, dec
+
+    def get_hst_cc_class_human(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CLUSTER_CLASS_HUMAN']
+
+    def get_hst_cc_class_ml_vgg(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CLUSTER_CLASS_ML_VGG']
+
+    def get_hst_cc_class_ml_vgg_qual(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CLUSTER_CLASS_ML_VGG_QUAL']
+
+    def get_hst_cc_age(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_AGE_MINCHISQ']
+
+    def get_hst_cc_age_err(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ_ERR']
+
+    def get_hst_cc_stellar_m(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ']
+
+    def get_hst_cc_stellar_m_err(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ_ERR']
+
+    def get_hst_cc_ebv(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_EBV_MINCHISQ']
+
+    def get_hst_cc_ebv_err(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_EBV_MINCHISQ_ERR']
+
+    def get_hst_cc_ci(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CI']
+
+    def get_hst_cc_min_chi2(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_REDUCED_MINCHISQ']
+
+    def get_hst_cc_cov_flag(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_NO_COVERAGE_FLAG']
+
+    def get_hst_cc_det_flag(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_NON_DETECTION_FLAG']
+
+    def get_hst_cc_band_flux(self, target, band, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_%s_mJy_TOT' % band]
+
+    def get_hst_cc_band_flux_err(self, target, band, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_%s_mJy_TOT_ERR' % band]
+
+    def get_hst_cc_band_vega_mag(self, target, band, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_%s_VEGA_TOT' % band]
+
+    def get_hst_cc_band_vega_mag_err(self, target, band, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_%s_VEGA_TOT_ERR' % band]
+
+    def get_hst_color_ub(self, target, classify='human', cluster_class='class12'):
+
+        color_u = self.get_hst_cc_band_vega_mag(target=target, band='F336W', classify=classify, cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify, cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify, cluster_class=cluster_class)
+
+        return color_u - color_b
+
+    def get_hst_color_vi(self, target, classify='human', cluster_class='class12'):
+
+        color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify, cluster_class=cluster_class)
+        color_i = self.get_hst_cc_band_vega_mag(target=target, band='F814W', classify=classify, cluster_class=cluster_class)
+
+        return color_v - color_i
+
+    def load_hst_obs_hdr(self, target):
+        if self.hst_obs_hdr_file_path is None:
+            raise AttributeError('the attribute self.hst_obs_hdr_file_path must be specified')
+
+        if (target[0:3] == 'ngc') & (target[3] == '0'):
+            target_string = target[0:3] + target[4:]
+        else:
+            target_string = target
+
+        header_df = read_csv(Path(self.hst_obs_hdr_file_path) / Path('header_info_%s_prime.txt' % target_string),
+                             delim_whitespace=True)
+        header_df.columns = header_df.columns.str.replace('#', '')
+        return header_df
+
+    def get_zp_mag(self, target, band, mag_sys='vega'):
+        header_df = self.load_hst_obs_hdr(target=target)
+        filter_set = np.array(header_df['filter'].to_list())
+        mask_filter = filter_set == band
+
+        if mag_sys == 'vega':
+            return np.array(header_df['zpVEGA'].to_list())[mask_filter]
+        elif mag_sys == 'AB':
+            return np.array(header_df['zpAB'].to_list())[mask_filter]
+        else:
+            raise KeyError('mag_sys must be vega or AB')
+
+    @staticmethod
+    def locate_morph_map(str_map, digit_position, str_code):
+        # add disc location
+        mask = np.char.rfind(str_map, str_code, start=digit_position, end=digit_position+1) == digit_position
+        if np.sum(mask) > 0:
+            feature_presence = True
+        else:
+            feature_presence = False
+        return feature_presence, mask
+
+    def load_morph_mask(self, target):
+
+        # erase north est south etc. specifications
+        if not target[-1].isdigit():
+            target = target[:-1]
+
+        # load
+        mask_path = (self.morph_mask_path + '/' + self.morph_mask_ver + '/%s_mask_%s.fits' %
+                     (target.upper(), self.morph_mask_ver))
+        hdu = fits.open(mask_path)
+        morph_map_float = hdu[0].data
+        # create array with strings as
+        morph_map_str = np.char.zfill(np.array(np.array(morph_map_float, dtype=int), dtype=str), 7)
+
+        target_morph_dict = {
+            'morph_map_float': morph_map_float,
+            'morph_map_str': morph_map_str,
+            'wcs': WCS(hdu[0].header)
+        }
+
+        presence_disc, mask_disc = self.locate_morph_map(str_map=morph_map_str, digit_position=6, str_code='1')
+        target_morph_dict.update({'presence_disc': presence_disc, 'mask_disc': mask_disc})
+
+        presence_in_disc, mask_in_disc = self.locate_morph_map(str_map=morph_map_str, digit_position=6, str_code='2')
+        target_morph_dict.update({'presence_in_disc': presence_in_disc, 'mask_in_disc': mask_in_disc})
+
+        presence_bulge, mask_bulge = self.locate_morph_map(str_map=morph_map_str, digit_position=5, str_code='1')
+        target_morph_dict.update({'presence_bulge': presence_bulge, 'mask_bulge': mask_bulge})
+
+        presence_bar, mask_bar = self.locate_morph_map(str_map=morph_map_str, digit_position=4, str_code='1')
+        target_morph_dict.update({'presence_bar': presence_bar, 'mask_bar': mask_bar})
+
+        presence_nuc_bar, mask_nuc_bar = self.locate_morph_map(str_map=morph_map_str, digit_position=4, str_code='2')
+        target_morph_dict.update({'presence_nuc_bar': presence_nuc_bar, 'mask_nuc_bar': mask_nuc_bar})
+
+        # get lenses
+        lens_count = 1
+        while True:
+            presence_lens, mask_lens = self.locate_morph_map(str_map=morph_map_str, digit_position=3,
+                                                             str_code=str(lens_count))
+            if lens_count == 1:
+                target_morph_dict.update({'presence_lens': presence_lens})
+                target_morph_dict.update({'presence_lens_%i' % lens_count: presence_lens,
+                                          'mask_lens_%i' % lens_count: mask_lens})
+            else:
+                if not presence_lens:
+                    mask_lens = np.zeros(mask_lens.shape, dtype=bool)
+                    for index in range(1, lens_count):
+                        mask_lens += target_morph_dict['mask_lens_%i' % index]
+                        target_morph_dict.update({'mask_lens': mask_lens})
+                    break
+                target_morph_dict.update({'presence_lens_%i' % lens_count: presence_lens,
+                                          'mask_lens_%i' % lens_count: mask_lens})
+            lens_count += 1
+
+        # get rings
+        ring_count = 1
+        while True:
+            presence_ring, mask_ring = self.locate_morph_map(str_map=morph_map_str, digit_position=2,
+                                                             str_code=str(ring_count))
+            if ring_count == 1:
+                target_morph_dict.update({'presence_ring': presence_ring})
+                target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
+                                          'mask_ring_%i' % ring_count: mask_ring})
+            else:
+                if not presence_ring:
+                    mask_ring = np.zeros(mask_ring.shape, dtype=bool)
+                    for index in range(1, ring_count):
+                        mask_ring += target_morph_dict['mask_ring_%i' % index]
+                        target_morph_dict.update({'mask_ring': mask_ring})
+                    break
+                target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
+                                          'mask_ring_%i' % ring_count: mask_ring})
+            ring_count += 1
+        # get arms
+        arm_count = 1
+        while True:
+            presence_arm, mask_arm = self.locate_morph_map(str_map=morph_map_str, digit_position=1,
+                                                           str_code=str(arm_count))
+            if arm_count == 1:
+                target_morph_dict.update({'presence_arm': presence_arm})
+                target_morph_dict.update({'presence_arm_%i' % arm_count: presence_arm,
+                                          'mask_arm_%i' % arm_count: mask_arm})
+            else:
+                if not presence_arm:
+                    mask_arm = np.zeros(mask_arm.shape, dtype=bool)
+                    for index in range(1, arm_count):
+                        mask_arm += target_morph_dict['mask_arm_%i' % index]
+                        target_morph_dict.update({'mask_arm': mask_arm})
+                    break
+                target_morph_dict.update({'presence_arm_%i' % arm_count: presence_arm,
+                                          'mask_arm_%i' % arm_count: mask_arm})
+            arm_count += 1
+
+        center_presence, mask_center = self.locate_morph_map(str_map=morph_map_str, digit_position=0, str_code='1')
+        target_morph_dict.update({'center_presence': center_presence, 'mask_center': mask_center})
+
+        # add only masks
+        mask_str_list = ['mask_disc', 'mask_in_disc', 'mask_bulge', 'mask_bar', 'mask_nuc_bar', 'mask_lens',
+                         'mask_ring', 'mask_arm', 'mask_center']
+
+        for mask_str in mask_str_list:
+
+            other_str_list = copy.deepcopy(mask_str_list)
+            other_str_list.remove(mask_str)
+
+            other_str_mask = np.zeros(target_morph_dict[mask_str].shape, dtype=bool)
+            for other_str in other_str_list:
+                other_str_mask += target_morph_dict[other_str]
+            target_morph_dict.update({mask_str + '_only': target_morph_dict[mask_str] * np.invert(other_str_mask)})
+
+        self.morph_mask_data.update({target: target_morph_dict})
+
+    def load_morph_mask_target_list(self, target_list):
+        for target in target_list:
+            self.load_morph_mask(target=target)
+
+    def get_morph_locations(self, target, ra, dec):
+
+        if not target[-1].isdigit():
+            target = target[:-1]
+
+        pos = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree), frame='fk5')
+        pos_pix = self.morph_mask_data[target]['wcs'].world_to_pixel(pos)
+        # print(pos_pix)
+        x_values = np.array(pos_pix[0], dtype=int)
+        y_values = np.array(pos_pix[1], dtype=int)
+
+        pos_mask_disc = self.morph_mask_data[target]['mask_disc'][y_values, x_values]
+        pos_mask_disc_only = self.morph_mask_data[target]['mask_disc_only'][y_values, x_values]
+        pos_mask_bulge = self.morph_mask_data[target]['mask_bulge'][y_values, x_values]
+        pos_mask_bulge_only = self.morph_mask_data[target]['mask_bulge_only'][y_values, x_values]
+        pos_mask_bar = self.morph_mask_data[target]['mask_bar'][y_values, x_values]
+        pos_mask_bar_only = self.morph_mask_data[target]['mask_bar_only'][y_values, x_values]
+        pos_mask_lens = self.morph_mask_data[target]['mask_lens'][y_values, x_values]
+        pos_mask_lens_only = self.morph_mask_data[target]['mask_lens_only'][y_values, x_values]
+        pos_mask_ring = self.morph_mask_data[target]['mask_ring'][y_values, x_values]
+        pos_mask_arm = self.morph_mask_data[target]['mask_arm'][y_values, x_values]
+        pos_mask_arm_only = self.morph_mask_data[target]['mask_arm_only'][y_values, x_values]
+        pos_mask_center = self.morph_mask_data[target]['mask_center'][y_values, x_values]
+
+        pos_mask_dict = {'pos_mask_disc': pos_mask_disc, 'pos_mask_disc_only': pos_mask_disc_only,
+                         'pos_mask_bulge': pos_mask_bulge, 'pos_mask_bulge_only': pos_mask_bulge_only,
+                         'pos_mask_bar': pos_mask_bar, 'pos_mask_bar_only': pos_mask_bar_only,
+                         'pos_mask_lens': pos_mask_lens, 'pos_mask_lens_only': pos_mask_lens_only,
+                         'pos_mask_ring': pos_mask_ring, 'pos_mask_arm': pos_mask_arm,
+                         'pos_mask_arm_only': pos_mask_arm_only, 'pos_mask_center': pos_mask_center}
+        return pos_mask_dict
 
 
-        # create flux file
-        flux_file = open(file_path, "w")
-        # add header for all variables
-        band_name_list = self.compute_cigale_band_name_list(band_list=band_list)
-        flux_file.writelines("# id             redshift  distance   ")
-        for band_name in band_name_list:
-            flux_file.writelines(band_name + "   ")
-            flux_file.writelines(band_name + "_err" + "   ")
-        flux_file.writelines(" \n")
-
-        # fill flux file
-        for name, redshift, dist, aperture_dict in zip(name_list, redshift_list, dist_list, aperture_dict_list):
-            flux_file.writelines(" %s   %f   %f  " % (name, redshift, dist))
-            flux_list, flux_err_list = self.compute_cigale_flux_list(band_list=band_list, aperture_dict=aperture_dict,
-                                                                     snr=snr)
-            for flux, flux_err in zip(flux_list, flux_err_list):
-                flux_file.writelines("%.15f   " % flux)
-                flux_file.writelines("%.15f   " % flux_err)
-            flux_file.writelines(" \n")
-
-        flux_file.close()
-
-    def compute_cigale_flux_list(self, band_list, aperture_dict, snr=3):
-
-        flux_list = []
-        flux_err_list = []
-
-        for band in band_list:
-            flux_list.append(aperture_dict['aperture_dict_%s' % band]['flux'])
-            flux_err_list.append(aperture_dict['aperture_dict_%s' % band]['flux_err'])
-
-        flux_list = np.array(flux_list)
-        flux_err_list = np.array(flux_err_list)
-
-        # compute the upper limits
-        upper_limits = (flux_list < 0) | (flux_list/flux_err_list < snr)
-        flux_list[upper_limits] = flux_err_list[upper_limits]
-        flux_err_list[upper_limits] *= -1
-
-        return flux_list, flux_err_list
-
-    def compute_cigale_band_name_list(self, band_list):
-
-        band_name_list = []
-        for band in band_list:
-            if band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
-                band_name_list.append(band + '_ACS')
-            elif band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
-                band_name_list.append(band + '_UVIS_CHIP2')
-            elif band in self.nircam_targets[self.target_name]['observed_bands']:
-                band_name_list.append(band + 'jwst.nircam.' + band)
-            elif band in self.miri_targets[self.target_name]['observed_bands']:
-                band_name_list.append(band + 'jwst.miri.' + band)
-
-        return band_name_list
 
 
+#
+# class CigaleAccess:
+#     """
+#     Access class to organize data structure of HST, NIRCAM and MIRI imaging data
+#     """
+#
+#     def __init__(self):
+#
+#     def create_cigale_flux_file(self, file_path, band_list, aperture_dict_list, snr=3, name_list=None,
+#                                 redshift_list=None, dist_list=None):
+#
+#         if isinstance(aperture_dict_list, dict):
+#             aperture_dict_list = [aperture_dict_list]
+#
+#         if name_list is None:
+#             name_list = np.arange(start=0,  stop=len(aperture_dict_list)+1)
+#         if redshift_list is None:
+#             redshift_list = [0.0] * len(aperture_dict_list)
+#         if dist_list is None:
+#             dist_list = [self.dist_dict[self.target_name]['dist']] * len(aperture_dict_list)
+#
+#         name_list = np.array(name_list, dtype=str)
+#         redshift_list = np.array(redshift_list)
+#         dist_list = np.array(dist_list)
+#
+#
+#         # create flux file
+#         flux_file = open(file_path, "w")
+#         # add header for all variables
+#         band_name_list = self.compute_cigale_band_name_list(band_list=band_list)
+#         flux_file.writelines("# id             redshift  distance   ")
+#         for band_name in band_name_list:
+#             flux_file.writelines(band_name + "   ")
+#             flux_file.writelines(band_name + "_err" + "   ")
+#         flux_file.writelines(" \n")
+#
+#         # fill flux file
+#         for name, redshift, dist, aperture_dict in zip(name_list, redshift_list, dist_list, aperture_dict_list):
+#             flux_file.writelines(" %s   %f   %f  " % (name, redshift, dist))
+#             flux_list, flux_err_list = self.compute_cigale_flux_list(band_list=band_list, aperture_dict=aperture_dict,
+#                                                                      snr=snr)
+#             for flux, flux_err in zip(flux_list, flux_err_list):
+#                 flux_file.writelines("%.15f   " % flux)
+#                 flux_file.writelines("%.15f   " % flux_err)
+#             flux_file.writelines(" \n")
+#
+#         flux_file.close()
+#
+#     def compute_cigale_flux_list(self, band_list, aperture_dict, snr=3):
+#
+#         flux_list = []
+#         flux_err_list = []
+#
+#         for band in band_list:
+#             flux_list.append(aperture_dict['aperture_dict_%s' % band]['flux'])
+#             flux_err_list.append(aperture_dict['aperture_dict_%s' % band]['flux_err'])
+#
+#         flux_list = np.array(flux_list)
+#         flux_err_list = np.array(flux_err_list)
+#
+#         # compute the upper limits
+#         upper_limits = (flux_list < 0) | (flux_list/flux_err_list < snr)
+#         flux_list[upper_limits] = flux_err_list[upper_limits]
+#         flux_err_list[upper_limits] *= -1
+#
+#         return flux_list, flux_err_list
+#
+#     def compute_cigale_band_name_list(self, band_list):
+#
+#         band_name_list = []
+#         for band in band_list:
+#             if band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
+#                 band_name_list.append(band + '_ACS')
+#             elif band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
+#                 band_name_list.append(band + '_UVIS_CHIP2')
+#             elif band in self.nircam_targets[self.target_name]['observed_bands']:
+#                 band_name_list.append(band + 'jwst.nircam.' + band)
+#             elif band in self.miri_targets[self.target_name]['observed_bands']:
+#                 band_name_list.append(band + 'jwst.miri.' + band)
+#
+#         return band_name_list
+#
+#

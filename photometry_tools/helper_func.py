@@ -360,4 +360,15 @@ def check_point_inside_ellipse(x_ell, y_ell, a_ell, b_ell, theta_ell, x_p, y_p):
     element_2 = ((np.sin(theta_ell)*(x_p - x_ell) - np.cos(theta_ell)*(y_p - y_ell))**2) / ((b_ell/2)**2)
     return (element_1 + element_2) <= 1
 
+def conv_mjy2vega(flux, ab_zp, vega_zp):
 
+    """This function (non-sophisticated as of now)
+     assumes the data are given in units of milli-Janskies"""
+
+    """First, convert mjy to f_nu"""
+    conv_f_nu = flux*np.power(10.0, -26)
+    """Convert f_nu in ergs s^-1 cm^-2 Hz^-1 to AB mag"""
+    abmag = -2.5*np.log10(conv_f_nu) - 48.60
+    """Convert AB mag to Vega mag"""
+    vega_mag = abmag + (vega_zp - ab_zp)
+    return vega_mag
