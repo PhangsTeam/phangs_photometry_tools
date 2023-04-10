@@ -38,8 +38,6 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         """
         super().__init__()
 
-        self.project_path = Path(__file__).parent.parent
-
         self.hst_data_path = Path(hst_data_path)
         self.nircam_data_path = Path(nircam_data_path)
         self.miri_data_path = Path(miri_data_path)
@@ -128,9 +126,15 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             raise AttributeError('The band <%s> is not in the list of possible NIRCAM bands.' % band)
 
         if nircam_data_folder is None:
-            nircam_data_folder = (self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver] /
-                                  self.nircam_targets[self.target_name]['folder_name'])
-        ending_of_band_file = 'nircam_lv3_%s_i2d_align.fits' % band.lower()
+            if self.nircam_data_ver == 'v0p7p3':
+                nircam_data_folder = self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver]
+            else:
+                nircam_data_folder = (self.nircam_data_path / self.nircam_ver_folder_names[self.nircam_data_ver] /
+                                      self.nircam_targets[self.target_name]['folder_name'])
+        if self.nircam_data_ver == 'v0p7p3':
+            ending_of_band_file = '%s_%s_anchored.fits' % (self.target_name, band)
+        else:
+            ending_of_band_file = 'nircam_lv3_%s_i2d_align.fits' % band.lower()
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=nircam_data_folder,
                                                        str_in_file_name=ending_of_band_file)
@@ -382,16 +386,16 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         wcs = self.hst_bands_data['%s_wcs_img' % band]
         if band in self.hst_targets[self.target_name]['wfc3_uvis_observed_bands']:
-            length_in_arcsec = self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee80']*3
+            length_in_arcsec = self.hst_encircle_apertures_wfc3_uvis2_arcsec[band]['ee80'] * 3
         elif band in self.hst_targets[self.target_name]['acs_wfc1_observed_bands']:
-            length_in_arcsec = self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee80']*3
+            length_in_arcsec = self.hst_encircle_apertures_acs_wfc1_arcsec[band]['ee80'] * 3
         else:
             raise KeyError('There is no computed PSF for the filter ', band,
                            ' You might need to run the script build_psf/build_hst_psf.py '
                            'in order to compute all PSFs')
         # add small psf
         small_psf_pix_size = int(helper_func.transform_world2pix_scale(length_in_arcsec=length_in_arcsec, wcs=wcs))
-        cut_border = int((psf_data.shape[0] - small_psf_pix_size)/2)
+        cut_border = int((psf_data.shape[0] - small_psf_pix_size) / 2)
         if cut_border < 1:
             psf_reduced_size = psf_data
         else:
@@ -414,25 +418,25 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         if band in self.nircam_targets[self.target_name]['observed_bands']:
             wcs = self.nircam_bands_data['%s_wcs_img' % band]
-            length_in_arcsec = self.nircam_encircle_apertures_arcsec[band]['ee80']*3
+            length_in_arcsec = self.nircam_encircle_apertures_arcsec[band]['ee80'] * 3
         elif band in self.miri_targets[self.target_name]['observed_bands']:
             wcs = self.miri_bands_data['%s_wcs_img' % band]
-            length_in_arcsec = self.miri_encircle_apertures_arcsec[band]['ee80']*3
+            length_in_arcsec = self.miri_encircle_apertures_arcsec[band]['ee80'] * 3
         else:
             raise KeyError('The band must be observed by NIRCAM or MIRI for this galaxy')
 
         # add small psf
         small_psf_pix_size = int(helper_func.transform_world2pix_scale(length_in_arcsec=length_in_arcsec, wcs=wcs))
-        cut_border = int((psf_data.shape[0] - small_psf_pix_size)/2)
+        cut_border = int((psf_data.shape[0] - small_psf_pix_size) / 2)
         if cut_border < 1:
             psf_reduced_size = psf_data
         else:
             psf_reduced_size = psf_data[cut_border:-cut_border, cut_border:-cut_border]
         self.small_psf_dict.update({'native_psf_%s' % band: psf_reduced_size})
 
-    def load_hst_nircam_miri_bands(self, band_list=None,  flux_unit='Jy', folder_name_list=None,
+    def load_hst_nircam_miri_bands(self, band_list=None, flux_unit='Jy', folder_name_list=None,
                                    img_file_name_list=None, err_file_name_list=None, psf_file_name_list=None,
-                                   load_psf=False):
+                                   load_err=True, load_psf=False):
         """
         wrapper to load all available HST, NIRCAM and MIRI observations into the constructor
 
@@ -486,18 +490,18 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
                                                                                   psf_file_name_list):
             if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
                 self.load_hst_band(band=band, flux_unit=flux_unit, hst_data_folder=folder_name,
-                                   img_file_name=img_file_name, err_file_name=err_file_name)
+                                   img_file_name=img_file_name, err_file_name=err_file_name, load_err=load_err)
                 if load_psf:
                     self.load_hst_native_psf(band=band, file_name=psf_file_name)
 
             elif band in self.nircam_bands:
                 self.load_nircam_band(band=band, flux_unit=flux_unit, nircam_data_folder=folder_name,
-                                      img_file_name=img_file_name)
+                                      img_file_name=img_file_name, load_err=load_err)
                 if load_psf:
                     self.load_jwst_native_psf(band=band, file_name=psf_file_name)
             elif band in self.miri_bands:
                 self.load_miri_band(band=band, flux_unit=flux_unit, miri_data_folder=folder_name,
-                                    img_file_name=img_file_name, err_file_name=err_file_name)
+                                    img_file_name=img_file_name, err_file_name=err_file_name, load_err=load_err)
                 if load_psf:
                     self.load_jwst_native_psf(band=band, file_name=psf_file_name)
             else:
@@ -753,7 +757,7 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
     """
 
     def __init__(self, hst_cc_data_path=None, hst_obs_hdr_file_path=None, hst_cc_ver='IR4', morph_mask_path=None,
-                 morph_mask_ver='v5'):
+                 morph_mask_ver='v5', sample_table_path=None, sample_table_ver='v1p6'):
         """
 
         """
@@ -767,20 +771,33 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
         self.morph_mask_ver = morph_mask_ver
         self.morph_mask_data = {}
 
+        self.sample_table_path = sample_table_path
+        self.sample_table_ver = sample_table_ver
+        self.sample_table = {}
+
         super().__init__()
 
     def load_hst_cc_catalog(self, target, classify='human', cluster_class='class12'):
-
-        cluster_dict_path = Path(self.hst_cc_data_path) / Path(self.hst_cc_ver) / Path(cluster_class)
 
         if (target[0:3] == 'ngc') & (target[3] == '0'):
             target_string = target[0:3] + target[4:]
         else:
             target_string = target
 
-        file_path = cluster_dict_path / Path('PHANGS_%s_%s_phangs_hst_v1p2_%s_%s.fits' % (self.hst_cc_ver, target_string, classify, cluster_class))
+        if cluster_class == 'candidates':
+            folder_str = 'InteractiveDisplay'
+            file_string = Path('%s_phangshst_candidates_bcw_v1p2_%s.fits' % (target_string, self.hst_cc_ver))
+        else:
+            folder_str = cluster_class
+            file_string = Path( 'PHANGS_%s_%s_phangs_hst_v1p2_%s_%s.fits' % (self.hst_cc_ver, target_string, classify,
+                                                                             cluster_class))
+
+        cluster_dict_path = Path(self.hst_cc_data_path) / Path(self.hst_cc_ver) / Path(folder_str)
+
+        file_path = cluster_dict_path / file_string
 
         if not os.path.isfile(file_path):
+            print(file_path, ' not found ! ')
             raise FileNotFoundError('there is no HST cluster catalog for the target ', target,
                                     ' make sure that the file ', file_path, ' exists')
 
@@ -837,6 +854,12 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
     def get_hst_cc_ci(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CI']
 
+    def get_hst_cc_mci_in(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MCI_IN']
+
+    def get_hst_cc_mci_out(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MCI_OUT']
+
     def get_hst_cc_min_chi2(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_REDUCED_MINCHISQ']
 
@@ -860,18 +883,23 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
     def get_hst_color_ub(self, target, classify='human', cluster_class='class12'):
 
-        color_u = self.get_hst_cc_band_vega_mag(target=target, band='F336W', classify=classify, cluster_class=cluster_class)
+        color_u = self.get_hst_cc_band_vega_mag(target=target, band='F336W', classify=classify,
+                                                cluster_class=cluster_class)
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
-            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify, cluster_class=cluster_class)
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
         else:
-            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify, cluster_class=cluster_class)
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
 
         return color_u - color_b
 
     def get_hst_color_vi(self, target, classify='human', cluster_class='class12'):
 
-        color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify, cluster_class=cluster_class)
-        color_i = self.get_hst_cc_band_vega_mag(target=target, band='F814W', classify=classify, cluster_class=cluster_class)
+        color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify,
+                                                cluster_class=cluster_class)
+        color_i = self.get_hst_cc_band_vega_mag(target=target, band='F814W', classify=classify,
+                                                cluster_class=cluster_class)
 
         return color_v - color_i
 
@@ -904,7 +932,7 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
     @staticmethod
     def locate_morph_map(str_map, digit_position, str_code):
         # add disc location
-        mask = np.char.rfind(str_map, str_code, start=digit_position, end=digit_position+1) == digit_position
+        mask = np.char.rfind(str_map, str_code, start=digit_position, end=digit_position + 1) == digit_position
         if np.sum(mask) > 0:
             feature_presence = True
         else:
@@ -1039,27 +1067,107 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
         x_values = np.array(pos_pix[0], dtype=int)
         y_values = np.array(pos_pix[1], dtype=int)
 
-        pos_mask_disc = self.morph_mask_data[target]['mask_disc'][y_values, x_values]
-        pos_mask_disc_only = self.morph_mask_data[target]['mask_disc_only'][y_values, x_values]
+        pos_mask_disc = (self.morph_mask_data[target]['mask_disc'] + self.morph_mask_data[target]['mask_in_disc'])[
+            y_values, x_values]
         pos_mask_bulge = self.morph_mask_data[target]['mask_bulge'][y_values, x_values]
-        pos_mask_bulge_only = self.morph_mask_data[target]['mask_bulge_only'][y_values, x_values]
         pos_mask_bar = self.morph_mask_data[target]['mask_bar'][y_values, x_values]
-        pos_mask_bar_only = self.morph_mask_data[target]['mask_bar_only'][y_values, x_values]
         pos_mask_lens = self.morph_mask_data[target]['mask_lens'][y_values, x_values]
-        pos_mask_lens_only = self.morph_mask_data[target]['mask_lens_only'][y_values, x_values]
         pos_mask_ring = self.morph_mask_data[target]['mask_ring'][y_values, x_values]
         pos_mask_arm = self.morph_mask_data[target]['mask_arm'][y_values, x_values]
-        pos_mask_arm_only = self.morph_mask_data[target]['mask_arm_only'][y_values, x_values]
         pos_mask_center = self.morph_mask_data[target]['mask_center'][y_values, x_values]
+        pos_classified = (pos_mask_disc + pos_mask_bulge + pos_mask_bar + pos_mask_lens + pos_mask_ring + pos_mask_arm +
+                          pos_mask_center)
+        pos_not_classified = np.invert(pos_classified)
 
-        pos_mask_dict = {'pos_mask_disc': pos_mask_disc, 'pos_mask_disc_only': pos_mask_disc_only,
-                         'pos_mask_bulge': pos_mask_bulge, 'pos_mask_bulge_only': pos_mask_bulge_only,
-                         'pos_mask_bar': pos_mask_bar, 'pos_mask_bar_only': pos_mask_bar_only,
-                         'pos_mask_lens': pos_mask_lens, 'pos_mask_lens_only': pos_mask_lens_only,
+        pos_mask_dict = {'pos_mask_disc': pos_mask_disc, 'pos_mask_bulge': pos_mask_bulge,
+                         'pos_mask_bar': pos_mask_bar, 'pos_mask_lens': pos_mask_lens,
                          'pos_mask_ring': pos_mask_ring, 'pos_mask_arm': pos_mask_arm,
-                         'pos_mask_arm_only': pos_mask_arm_only, 'pos_mask_center': pos_mask_center}
+                         'pos_mask_center': pos_mask_center, 'pos_classified': pos_classified,
+                         'pos_not_classified': pos_not_classified}
         return pos_mask_dict
 
+    def access_leroy19_table(self):
+        # access data table of Leroy+19 doi:10.3847/1538-4365/ab3925
+        path_tab4 = self.project_path / 'data' / 'leroy+19' / 'J_ApJS_244_24' / 'table4.dat'
+        path_tab5 = self.project_path / 'data' / 'leroy+19' / 'J_ApJS_244_24' / 'table5.dat'
+        import pandas as pd
+        df_tab4 = pd.read_fwf(path_tab4, header=None)
+        df_tab5 = pd.read_fwf(path_tab5, header=None)
+        pgc_name = df_tab4[0]
+        ngc_name = df_tab4[1]
+        print(ngc_name.to_numpy()[7])
+        print(ngc_name.to_numpy()[ngc_name == 'NGC7805'])
+        print(ngc_name.to_numpy()[ngc_name == 'NGC7496'])
+        print(pgc_name.to_numpy()[pgc_name == 'PGC5974'])
+        exit()
+
+    def load_sample_table(self):
+        path_sample_table = (self.sample_table_path + '/' + self.sample_table_ver +
+                             '/phangs_sample_table_%s.fits' % self.sample_table_ver)
+
+        hdu_sample_table = fits.open(path_sample_table)
+        data_sample_table = hdu_sample_table[1].data
+        # print(data_sample_table.names)
+
+        target_names = data_sample_table['name']
+        sfr = data_sample_table['props_sfr']
+        sfr_err = data_sample_table['props_sfr_unc']
+        mstar = data_sample_table['props_mstar']
+        mstar_err = data_sample_table['props_mstar_unc']
+
+        self.sample_table.update({
+            'target_names': target_names, 'sfr': sfr, 'sfr_err': sfr_err, 'mstar': mstar, 'mstar_err': mstar_err
+        })
+
+    def get_target_sfr(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['sfr'][mask_target][0]
+
+    def get_target_sfr_err(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['sfr_err'][mask_target][0]
+
+    def get_target_mstar(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['mstar'][mask_target][0]
+
+    def get_target_mstar_err(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['mstar_err'][mask_target][0]
+
+    def get_target_ssfr(self, target):
+        sfr = self.get_target_sfr(target=target)
+        mstar = self.get_target_mstar(target=target)
+        return sfr / mstar
+
+    def get_target_ssfr_err(self, target):
+        sfr = self.get_target_sfr(target=target)
+        sfr_err = self.get_target_sfr_err(target=target)
+        mstar = self.get_target_mstar(target=target)
+        mstar_err = self.get_target_mstar_err(target=target)
+
+        return np.sqrt((sfr_err/mstar)**2 + (sfr * mstar_err / (mstar**2))**2)
+
+    def get_target_log_ssfr(self, target):
+        sfr = np.log10(self.get_target_sfr(target=target))
+        mstar = np.log10(self.get_target_mstar(target=target))
+        return sfr - mstar
+
+    def get_target_log_ssfr_err(self, target):
+        sfr = self.get_target_sfr(target=target)
+        sfr_err = self.get_target_sfr_err(target=target)
+        mstar = self.get_target_mstar(target=target)
+        mstar_err = self.get_target_mstar_err(target=target)
+
+        return np.sqrt((sfr_err/(sfr * np.log(10)))**2 + (mstar_err/(mstar * np.log(10)))**2)
 
 
 

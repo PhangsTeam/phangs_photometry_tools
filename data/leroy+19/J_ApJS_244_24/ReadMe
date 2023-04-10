@@ -1,0 +1,149 @@
+J/ApJS/244/24 A z=0 Multiwavelength Galaxy Synthesis (z0MGS). I. (Leroy+, 2019)
+================================================================================
+A z=0 Multiwavelength Galaxy Synthesis.
+I. A WISE and GALEX atlas of local galaxies.
+    Leroy A.K., Sandstrom K.M., Lang D., Lewis A., Salim S., Behrens E.A.,
+    Chastenet J., Chiang I.-D., Gallagher M.J., Kessler S., Utomo D.
+   <Astrophys. J. Suppl. Ser., 244, 24-24 (2019)>
+   =2019ApJS..244...24L    (SIMBAD/NED BibCode)
+================================================================================
+ADC_Keywords: Galaxy catalogs; Infrared sources; Ultraviolet
+Keywords: galaxies: general; galaxies: ISM; galaxies: spiral
+          galaxies: star formation; infrared: galaxies; ultraviolet: galaxies
+
+Abstract:
+    We present an atlas of ultraviolet and infrared images of ~15750 local
+    (d<~50Mpc) galaxies, as observed by NASA's Wide-field Infrared Survey
+    Explorer (WISE) and Galaxy Evolution Explorer (GALEX) missions. These
+    maps have matched resolution (FWHM 7.5" and 15"), matched astrometry,
+    and a common procedure for background removal. We demonstrate that
+    they agree well with resolved intensity measurements and integrated
+    photometry from previous surveys. This atlas represents the first part
+    of a program (the z=0 Multiwavelength Galaxy Synthesis) to create a
+    large, uniform database of resolved measurements of gas and dust in
+    nearby galaxies. This atlas allows us estimate local and integrated
+    star formation rates (SFRs) and stellar masses (M_*_) across the local
+    galaxy population in a uniform way. In the appendix, we use the
+    population synthesis fits of Salim+ (2016ApJS..227....2S and
+    2018ApJ...859...11S) to calibrate integrated M_*_ and SFR estimators
+    based on GALEX and WISE. Because they leverage a Sloan Digital Sky
+    Survey (SDSS)-based training set of >100000 galaxies, these
+    calibrations have high precision and allow us to rigorously compare
+    local galaxies to SDSS results. We provide these SFR and M_*_
+    estimates for all galaxies in our sample and show that our results
+    yield a "main sequence" of star-forming galaxies comparable to
+    previous work. We also show the distribution of intensities from
+    resolved galaxies in NUV-to-WISE1 versus WISE1-to-WISE3 space, which
+    captures much of the key physics accessed by these bands.
+
+Description:
+    Our final "z=0 Multiwavelength Galaxy Synthesis" (z0MGS) sample,
+    extracted from LEDA, consists of ~15750 local galaxies with luminosity
+    greater than the Large Magellanic Cloud (LMC) and likely to lie within
+    ~50Mpc.
+
+    To create the WISE maps, we used the unWISE reprocessing
+    (Lang 2014AJ....147..108L) of the WISE all-sky survey
+    (Wright+ 2010AJ....140.1868W). See Section 4.
+
+    To create the GALEX maps, we downloaded every FUV and NUV tile
+    obtained by GALEX during its mission and constructed our own cutouts.
+    See Section 5.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName      Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe            80        .   This file
+table4.dat       105    15748   SFR and M* estimates for local galaxies
+table5.dat        63      100   WISE Mass-to-Light ratio and SFR calibrations
+                                 in M*-sSFR space
+--------------------------------------------------------------------------------
+
+See also:
+ VII/237 : HYPERLEDA. I. Catalog of galaxies (Paturel+, 2003)
+ VII/238 : HYPERLEDA. II. Homogenized HI data (Paturel+, 2003)
+ VII/233 : The 2MASS Extended sources (IPAC/UMass, 2003-2006)
+ II/335  : Revised cat. of GALEX UV sources (GUVcat_AIS GR6+7) (Bianchi+ 2017)
+ I/345   : Gaia DR2 (Gaia Collaboration, 2018)
+ II/363  : The band-merged unWISE Catalog (Schlafly+, 2019)
+ J/ApJS/173/185 : GALEX ultraviolet atlas of nearby galaxies (Gil de Paz+, 2007)
+ J/ApJ/671/333  : Aperture photometry in NGC 5194 (Kennicutt+, 2007)
+ J/ApJS/173/572 : GALEX/Spitzer photometry in NGC 7331 (Thilker+, 2007)
+ J/AJ/136/2563  : HI Nearby Galaxy Survey, THINGS (Walter+, 2008)
+ J/AJ/136/2782  : Star formation efficiency in nearby galaxies (Leroy+, 2008)
+ J/ApJ/703/517  : The Spitzer Local Volume Legacy: IR photometry (Dale+, 2009)
+ J/ApJ/706/599  : H{alpha} and UV SFR in the local volume (Lee+, 2009)
+ J/PASP/122/261 : Herschel Reference Survey Sample (Boselli+, 2010)
+ J/ApJ/714/1256 : Far-IR star formation rate indicators (Calzetti+, 2010)
+ J/PASP/122/1397  : Spitzer Survey of Stellar Structure in Gal. (Sheth+, 2010)
+ J/PASP/123/1011  : Star Formation Reference Survey (SFRS) (Ashby+, 2011)
+ J/ApJ/777/42   : Kinematic and HI data for the NFGS (Kannappan+, 2013)
+ J/A+A/582/A121 : Dust properties in galaxies (Remy-Ruyer+, 2015)
+ J/AJ/152/50    : Cosmicflows-3 catalog (CF3) (Tully+, 2016)
+ J/ApJS/234/18  : GALEX/S4G surface brightness profiles. I. (Bouquin+, 2018)
+ J/A+A/609/A37  : 875 nearby galaxies multiwavelength photometry (Clark+, 2018)
+ J/A+A/622/A103 : Python Code Investigating GALaxy Emission (Boquien+, 2019)
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units         Label  Explanations
+--------------------------------------------------------------------------------
+   1-  7 I7     ---           PGC    [4/5953111] PGC identifier
+   9- 17 A9     ---           NGC    NGC identifier; if available
+  19- 28 A10    ---           UGC    UGC identifier; if available
+  30- 36 A7     ---           IC     IC identifier; if available
+  38- 42 F5.1   Mpc           Dist   [0.4/335] Adopted distance
+  44- 47 F4.2   [Mpc]       e_Dist   [0.01/1.1] Uncertainty in log_10_ distance
+  49- 53 F5.2   [Msun]        logM*  [5.9/12.2]? log stellar mass
+  55- 58 F4.2   [Msun]      e_logM*  [0.1/1.2]? Uncertainty in logM* (1)
+  60- 63 F4.2   [Msun/Lsun]   Gamma* [0.2/0.5]? Adopted WISE 3.4 micron band
+                                      mass-to-light ratio (2)
+  65- 72 A8     ---         n_Gamma* Method used to estimate Gamma*
+  74- 78 F5.2   [Msun/yr]     logSFR [-5.2/3.1]? log star formation rate
+  80- 83 F4.2   [Msun/yr]   e_logSFR [0.2/3.3]? Uncertainty in logSFR (1)
+  85- 93 A9     ---         n_logSFR Method used to estimate logSFR
+  95- 99 F5.2   [-]           DelMS  [-1.6/2.4]? Offset from star forming
+                                       main sequence (3)
+ 101-105 A5     ---           Flags  [AGS, ] Additional flag(s) (4)
+--------------------------------------------------------------------------------
+Note (1): Not including distance uncertainty.
+Note (2): If no logSFR is provided, assume Gamma* of 0.5 Msun/Lsun, a
+          reasonable upper limit (FIXEDUL).
+Note (3): Not provided for quiescent galaxies or galaxies without
+          hybrid SFR tracers.
+Note (4): Flag as follows:
+    S = heavy star contamination;
+    G = galaxy overlap;
+    A = saturation a concern.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table5.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units        Label     Explanations
+--------------------------------------------------------------------------------
+   1-  5 F5.2   [Msun]       logM*     [9/11] log stellar mass; X axis
+   7- 12 F6.2   [Msun]       logSFR/M* [-12/-8.2] log stellar mass from CIGALE;
+                                        Y axis
+  14- 16 F3.1   [-]          logN      [1/4]? log number of galaxies in cell
+  18- 21 F4.2   [Msun/Lsun]  Gamma*    [0.04/0.52]? Median WISE 3.4 micron band
+                                        mass to light ratio
+  23- 28 F6.2   ---          logC1     [-43.2/-42.5]? log C for WISE 22um band4
+                                        in FUV+WISE4 in Msun/yr/(erg/s)
+  30- 35 F6.2   ---          logC2     [-43.9/-42.6]? log C for WISE 22um band4
+                                        in NUV+WISE4 in Msun/yr/(erg/s)
+  37- 42 F6.2   ---          logC3     [-43.1/-42.4]? log C for WISE 22um band4
+                                        in WISE4 only in Msun/yr/(erg/s)
+  44- 49 F6.2   ---          logC4     [-43.4/-42]? log C for WISE 12um band3
+                                        in FUV+WISE3 in Msun/yr/(erg/s)
+  51- 56 F6.2   ---          logC5     [-43.4/-42]? log C for WISE 12um band3
+                                        in NUV+WISE3 in Msun/yr/(erg/s)
+  58- 63 F6.2   ---          logC6     [-43.3/-41.9]? log C for WISE 12um band3
+                                        in WISE3 only in Msun/yr/(erg/s)
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                  Prepared by [AAS], Emmanuelle Perret [CDS]    18-Feb-2020

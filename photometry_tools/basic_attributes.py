@@ -5,7 +5,7 @@ Classes to gather basic attributes such as folder names, observation statuses or
 from scipy.signal import fftconvolve
 import numpy as np
 # import tensorflow as tf
-
+from pathlib import Path
 from zfit import Parameter
 
 
@@ -16,6 +16,8 @@ class PhangsDataStructure:
 
     def __init__(self):
         super().__init__()
+
+        self.project_path = Path(__file__).parent.parent
 
         self.phangs_galaxy_list = ['ic1954', 'ic5332', 'ngc0628', 'ngc0685', 'ngc1087', 'ngc1097', 'ngc1300', 'ngc1317',
                                    'ngc1365', 'ngc1385', 'ngc1433', 'ngc1512', 'ngc1559', 'ngc1566', 'ngc1672',
@@ -41,6 +43,8 @@ class PhangsDataStructure:
             'ic1954': {'dist': 12.8, 'dist_err': 2.05, 'method': 'NAM+TF'},
             'ic5332': {'dist': 9.01, 'dist_err': 0.41, 'method': 'TRGB'},
             'ngc0628': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
+            'ngc0628c': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
+            'ngc0628e': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
             'ngc0685': {'dist': 19.94, 'dist_err': 2.99, 'method': 'NAM'},
             'ngc1087': {'dist': 15.85, 'dist_err': 2.24, 'method': 'Group'},
             'ngc1097': {'dist': 13.58, 'dist_err': 2.04, 'method': 'NAM'},
@@ -87,7 +91,7 @@ class PhangsDataStructure:
         self.target_observed_miri = ['ngc0628', 'ngc7496', 'ngc1365']
 
         self.hst_ver_folder_names = {'v1': 'v1.0', 'v0.9': 'v0.9'}
-        self.nircam_ver_folder_names = {'v0p4p2': 'v0p4p2'}
+        self.nircam_ver_folder_names = {'v0p4p2': 'v0p4p2', 'v0p7p3': 'v0p7p3_anchored'}
         self.miri_ver_folder_names = {'v0p5': 'v0p5_miri', 'v0p6': 'v0p6_miri'}
 
         self.hst_targets = {
@@ -140,7 +144,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc1512':
-                {'folder_name': 'ngc1512',
+                {'folder_name': 'ngc1512mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc1559':
@@ -152,7 +156,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc1672':
-                {'folder_name': 'ngc1672',
+                {'folder_name': 'ngc1672mosaic',
                  'acs_wfc1_observed_bands': ['F555W', 'F435W', 'F550M', 'F658N'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
             'ngc1792':
@@ -168,23 +172,23 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc2903':
-                {'folder_name': 'ngc2903',
+                {'folder_name': 'ngc2903mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc3351':
-                {'folder_name': 'ngc3351',
+                {'folder_name': 'ngc3351mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F547M', 'F555W', 'F657N', 'F814W']},
             'ngc3621':
-                {'folder_name': 'ngc3621',
+                {'folder_name': 'ngc3621mosaic',
                  'acs_wfc1_observed_bands': ['F435W', 'F555W', 'F814W'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W']},
             'ngc3627':
-                {'folder_name': 'ngc3627',
+                {'folder_name': 'ngc3627mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4254':
-                {'folder_name': 'ngc4254',
+                {'folder_name': 'ngc4254mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4298':
@@ -196,7 +200,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4321':
-                {'folder_name': 'ngc4321',
+                {'folder_name': 'ngc4321mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4535':
@@ -204,7 +208,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4536':
-                {'folder_name': 'ngc4536',
+                {'folder_name': 'ngc4536mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc4548':
@@ -232,7 +236,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc5068':
-                {'folder_name': 'ngc5068',
+                {'folder_name': 'ngc5068mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc5248':
@@ -240,7 +244,7 @@ class PhangsDataStructure:
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc6744':
-                {'folder_name': 'ngc6744',
+                {'folder_name': 'ngc6744mosaic',
                  'acs_wfc1_observed_bands': [],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F547M', 'F555W', 'F657N', 'F814W']},
             'ngc7496':
@@ -254,15 +258,21 @@ class PhangsDataStructure:
         }
 
         self.nircam_targets = {
-            'ngc0628':
-                {'folder_name': 'ngc0628',
-                 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
-            'ngc7496':
-                {'folder_name': 'ngc7496',
-                 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
-            'ngc1365':
-                {'folder_name': 'ngc1365',
-                 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc0628': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1087': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1300': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1365': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1385': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1433': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1512': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1566': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc1672': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc3627': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc4303': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc4321': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc4535': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc5068': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']},
+            'ngc7496': {'folder_name': 'ngc0628', 'observed_bands': ['F200W', 'F300M', 'F335M', 'F360M']}
         }
         self.miri_targets = {
             'ngc0628':

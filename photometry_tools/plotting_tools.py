@@ -447,7 +447,7 @@ class PlotPhotometry:
                                                      cutout_dict=cutout_dict)
 
         # plot the postage_staps
-        plot_postage_stamps(axis_dict=axis_dict, cutout_dict=cutout_dict, aperture_dict=aperture_dict,
+        plot_postage_stamps_circ(axis_dict=axis_dict, cutout_dict=cutout_dict, aperture_dict=aperture_dict,
                             filter_colors=filter_colors, fontsize=fontsize, show_ax_label=show_ax_label)
 
         plot_sed_data_points(ax=ax_sed, band_list=cutout_dict['band_list'], aperture_dict=aperture_dict,
@@ -599,7 +599,7 @@ def add_axis_hst_nircam_miri_postage(figure, hst_band_list, nircam_band_list, mi
     return axis_dict
 
 
-def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fontsize=15, show_ax_label=None):
+def plot_postage_stamps_circ(axis_dict, cutout_dict, aperture_dict, filter_colors, fontsize=15, show_ax_label=None):
 
     band_list = cutout_dict['band_list']
 
@@ -627,6 +627,31 @@ def plot_postage_stamps(axis_dict, cutout_dict, aperture_dict, filter_colors, fo
             axis_dict['ax_%s' % band].coords['dec'].display_minor_ticks(True)
         else:
             erase_wcs_axis(axis_dict['ax_%s' % band])
+
+
+def plot_postage_stamps(ax, cutout, filter_color='k', fontsize=15, show_ax_label=False, title=''):
+
+    if show_ax_label is None:
+        show_ax_label = ['None']
+    elif isinstance(show_ax_label, str):
+        show_ax_label = [show_ax_label]
+
+
+    m, s = np.nanmean(cutout.data), np.nanstd(cutout.data)
+    ax.imshow(cutout.data, cmap='Greys', vmin=m-s, vmax=m+5*s)
+    ax.set_title(title.upper(), fontsize=fontsize, color=filter_color)
+    if show_ax_label:
+        ax.tick_params(axis='both', which='both', width=3, length=7, direction='in',
+                                              color='k', labelsize=fontsize-11)
+        ax.coords['dec'].set_ticklabel(rotation=90)
+        ax.coords['dec'].set_axislabel('DEC. (2000.0)', minpad=0.3, fontsize=fontsize-11)
+        ax.coords['ra'].set_axislabel('R.A. (2000.0)', minpad=0.8, fontsize=fontsize-11)
+        ax.coords['ra'].set_ticks(number=2)
+        ax.coords['ra'].display_minor_ticks(True)
+        ax.coords['dec'].set_ticks(number=2)
+        ax.coords['dec'].display_minor_ticks(True)
+    else:
+        erase_wcs_axis(ax)
 
 
 def erase_wcs_axis(ax):
