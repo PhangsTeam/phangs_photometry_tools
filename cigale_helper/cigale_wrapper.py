@@ -323,11 +323,15 @@ class CigaleModelWrapper:
             ax.axvspan(self.hst_lam_nm[i] - self.hst_fwhm[i], self.hst_lam_nm[i] + self.hst_fwhm[i], alpha=alpha,
                        color='#636363')
 
-    def plot_hst_filters(self, ax, fontsize=15, alpha=0.3):
+    def plot_hst_filters(self, ax, fontsize=15, alpha=0.3, color=None):
 
         for i in range(len(self.hst_lam_nm)):
+            if color is None:
+                patch_color = self.hst_filter_colors[i]
+            else:
+                patch_color = color
             ax.axvspan(self.hst_lam_nm[i] - self.hst_fwhm[i], self.hst_lam_nm[i] + self.hst_fwhm[i], alpha=alpha,
-                       color=self.hst_filter_colors[i])
+                       color=patch_color)
             ax.text(self.hst_lam_nm[i], 2e-7, self.hst_filter_labels[i], fontsize=fontsize, rotation=90, ha='center')
 
     @staticmethod

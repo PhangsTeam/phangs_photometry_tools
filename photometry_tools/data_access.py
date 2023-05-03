@@ -894,6 +894,28 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         return color_u - color_b
 
+    def get_hst_color_nuvb(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv = self.get_hst_cc_band_vega_mag(target=target, band='F275W', classify=classify,
+                                                  cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        return color_nuv - color_b
+
+    def get_hst_color_nuvu(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv = self.get_hst_cc_band_vega_mag(target=target, band='F275W', classify=classify,
+                                                  cluster_class=cluster_class)
+        color_u = self.get_hst_cc_band_vega_mag(target=target, band='F336W', classify=classify,
+                                                cluster_class=cluster_class)
+
+        return color_nuv - color_u
+
     def get_hst_color_vi(self, target, classify='human', cluster_class='class12'):
 
         color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify,
@@ -995,24 +1017,76 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
             lens_count += 1
 
         # get rings
-        ring_count = 1
-        while True:
-            presence_ring, mask_ring = self.locate_morph_map(str_map=morph_map_str, digit_position=2,
-                                                             str_code=str(ring_count))
-            if ring_count == 1:
-                target_morph_dict.update({'presence_ring': presence_ring})
-                target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
-                                          'mask_ring_%i' % ring_count: mask_ring})
-            else:
-                if not presence_ring:
-                    mask_ring = np.zeros(mask_ring.shape, dtype=bool)
-                    for index in range(1, ring_count):
-                        mask_ring += target_morph_dict['mask_ring_%i' % index]
-                        target_morph_dict.update({'mask_ring': mask_ring})
-                    break
-                target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
-                                          'mask_ring_%i' % ring_count: mask_ring})
-            ring_count += 1
+        central_pos = self.get_target_central_pos(galaxy_name=target)
+        central_pos_pix = target_morph_dict['wcs'].world_to_pixel(central_pos)
+        presence_ring, mask_ring = self.locate_morph_map(str_map=morph_map_str, digit_position=2,
+                                                         str_code=str(1))
+        # there is a problem with the different ring masks in the dataa release all rings have the same string index.
+        # Therefore, we need to assign each ring individually
+        target_morph_dict.update({'presence_ring': presence_ring})
+        target_morph_dict.update({'mask_ring': mask_ring})
+        if presence_ring:
+            x_axis_val = np.linspace(1, mask_ring.shape[1], mask_ring.shape[1])
+            y_axis_val = np.linspace(1, mask_ring.shape[0], mask_ring.shape[0])
+            x_coords, y_coords = np.meshgrid(x_axis_val, y_axis_val)
+
+            dist_to_centre = np.sqrt((x_coords - central_pos_pix[0]) ** 2 + (y_coords - central_pos_pix[1]) ** 2)
+
+            dist_to_centre[~mask_ring] = np.nan
+            ring_dist_hist, dist_bins = np.histogram(dist_to_centre[mask_ring], bins=np.linspace(0, max(dist_to_centre[mask_ring])))
+            mask_ring_signal = ring_dist_hist > 0
+            # ceter_of_dist_bins = (dist_bins[1:] + dist_bins[:-1]) / 2
+
+            ring_min_rad = []
+            ring_max_rad = []
+
+            in_ring_bool = False
+            for index in range(len(ring_dist_hist)):
+                if mask_ring_signal[index] & np.invert(in_ring_bool):
+                    ring_min_rad.append(dist_bins[index-1])
+                    in_ring_bool = True
+                    continue
+
+                if np.invert(mask_ring_signal[index]) & in_ring_bool:
+                    ring_max_rad.append(dist_bins[index+1])
+                    in_ring_bool = False
+                    continue
+
+            for ring_index in range(len(ring_min_rad)):
+                if (ring_index + 1) < len(ring_min_rad):
+                    mask_individual_ring = ((dist_to_centre > ring_min_rad[ring_index]) &
+                                            (dist_to_centre < ring_max_rad[ring_index]) & mask_ring)
+                else:
+                    mask_individual_ring = (dist_to_centre > ring_min_rad[ring_index]) & mask_ring
+                target_morph_dict.update({'presence_ring_%i' % (ring_index+1): True,
+                                          'mask_ring_%i' % (ring_index+1): mask_individual_ring})
+        else:
+            target_morph_dict.update({'presence_ring_1': presence_ring})
+            target_morph_dict.update({'mask_ring_1': mask_ring})
+
+        # add general mask
+
+
+        # old code which canot distinguish between different rings
+        # ring_count = 1
+        # while True:
+        #     presence_ring, mask_ring = self.locate_morph_map(str_map=morph_map_str, digit_position=2,
+        #                                                      str_code=str(ring_count))
+        #     if ring_count == 1:
+        #         target_morph_dict.update({'presence_ring': presence_ring})
+        #         target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
+        #                                   'mask_ring_%i' % ring_count: mask_ring})
+        #     else:
+        #         if not presence_ring:
+        #             mask_ring = np.zeros(mask_ring.shape, dtype=bool)
+        #             for index in range(1, ring_count):
+        #                 mask_ring += target_morph_dict['mask_ring_%i' % index]
+        #                 target_morph_dict.update({'mask_ring': mask_ring})
+        #             break
+        #         target_morph_dict.update({'presence_ring_%i' % ring_count: presence_ring,
+        #                                   'mask_ring_%i' % ring_count: mask_ring})
+        #     ring_count += 1
+
         # get arms
         arm_count = 1
         while True:
@@ -1072,7 +1146,7 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
         pos_mask_bulge = self.morph_mask_data[target]['mask_bulge'][y_values, x_values]
         pos_mask_bar = self.morph_mask_data[target]['mask_bar'][y_values, x_values]
         pos_mask_lens = self.morph_mask_data[target]['mask_lens'][y_values, x_values]
-        pos_mask_ring = self.morph_mask_data[target]['mask_ring'][y_values, x_values]
+        pos_mask_ring = self.morph_mask_data[target]['mask_ring_1'][y_values, x_values]
         pos_mask_arm = self.morph_mask_data[target]['mask_arm'][y_values, x_values]
         pos_mask_center = self.morph_mask_data[target]['mask_center'][y_values, x_values]
         pos_classified = (pos_mask_disc + pos_mask_bulge + pos_mask_bar + pos_mask_lens + pos_mask_ring + pos_mask_arm +
@@ -1107,16 +1181,19 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         hdu_sample_table = fits.open(path_sample_table)
         data_sample_table = hdu_sample_table[1].data
-        # print(data_sample_table.names)
+        print(data_sample_table.names)
 
         target_names = data_sample_table['name']
         sfr = data_sample_table['props_sfr']
         sfr_err = data_sample_table['props_sfr_unc']
         mstar = data_sample_table['props_mstar']
         mstar_err = data_sample_table['props_mstar_unc']
+        inclination = data_sample_table['orient_incl']
+        inclination_err = data_sample_table['orient_incl_unc']
 
         self.sample_table.update({
-            'target_names': target_names, 'sfr': sfr, 'sfr_err': sfr_err, 'mstar': mstar, 'mstar_err': mstar_err
+            'target_names': target_names, 'sfr': sfr, 'sfr_err': sfr_err, 'mstar': mstar, 'mstar_err': mstar_err,
+            'inclination': inclination, 'inclination_err': inclination_err
         })
 
     def get_target_sfr(self, target):
@@ -1169,7 +1246,17 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         return np.sqrt((sfr_err/(sfr * np.log(10)))**2 + (mstar_err/(mstar * np.log(10)))**2)
 
+    def get_target_incl(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['inclination'][mask_target][0]
 
+    def get_target_incl_err(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['inclination_err'][mask_target][0]
 
 #
 # class CigaleAccess:

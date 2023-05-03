@@ -32,7 +32,6 @@ def identify_file_in_folder(folder_path, str_in_file_name):
 
     if isinstance(folder_path, str):
         folder_path = Path(folder_path)
-
     identified_files = list(filter(lambda x: str_in_file_name in x, os.listdir(folder_path)))
     if not identified_files:
         raise FileNotFoundError('The data file containing the string %s does not exist.' % str_in_file_name)
@@ -263,6 +262,42 @@ def calc_coord_separation(ra_ref, dec_ref, ra, dec):
     coord = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree), frame='fk5')
 
     return coord_ref.separation(coord)
+
+
+def get_pixel_surface_area_sq_kp(wcs, dist):
+    pixel_scale = wcs.proj_plane_pixel_scales()[0]
+    return (pixel_scale.to(u.arcsec).value * dist * 4.848 * 1e-3) ** 2
+
+
+def arcsec2kpc(dist_arcsec, dist):
+    return dist_arcsec * dist * 4.848 * 1e-3
+
+
+def get_pixel_surface_area_sq_kp_wrong(wcs, ra, dec, dist):
+
+    print('This is not entirly correct')
+    exit()
+
+    pixel_surface_area_sq_deg = wcs.proj_plane_pixel_area()
+
+    central_coordinates = SkyCoord(ra=ra * u.deg,
+                                   dec=dec * u.deg,
+                                   distance=dist*u.Mpc)
+
+    coords_1deg_ra_offset = SkyCoord(ra=central_coordinates.ra + 1*u.deg,
+                                     dec=central_coordinates.dec,
+                                     distance=dist*u.Mpc)
+    coords_1deg_dec_offset = SkyCoord(ra=central_coordinates.ra,
+                                      dec=central_coordinates.dec + 1*u.deg,
+                                      distance=dist*u.Mpc)
+
+    offset_dist_ra_mpc = central_coordinates.separation_3d(coords_1deg_ra_offset)
+    offset_dist_dec_mpc = central_coordinates.separation_3d(coords_1deg_dec_offset)
+
+    # print('offset_dist_ra_mpc ', offset_dist_ra_mpc)
+    # print('offset_dist_dec_mpc ', offset_dist_dec_mpc)
+
+    return (pixel_surface_area_sq_deg.value * offset_dist_ra_mpc.to(u.kpc) * offset_dist_dec_mpc.to(u.kpc)).value
 
 
 def set_2d_gauss_params(fmodel, initial_params, wcs, img_mean, img_std, img_max, running_prefix='g_'):

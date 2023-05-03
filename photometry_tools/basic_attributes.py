@@ -82,11 +82,6 @@ class PhangsDataStructure:
             'ngc7496': {'dist': 18.72, 'dist_err': 2.81, 'method': 'NAM'}
         }
 
-
-
-
-
-
         self.target_observed_nircam = ['ngc0628', 'ngc7496', 'ngc1365']
         self.target_observed_miri = ['ngc0628', 'ngc7496', 'ngc1365']
 
@@ -283,6 +278,12 @@ class PhangsDataStructure:
                 {'observed_bands': ['F770W', 'F1000W', 'F1130W', 'F2100W']},
         }
 
+    def get_target_central_pos(self, galaxy_name):
+        from astroquery.simbad import Simbad
+        import astropy.units as u
+        from astropy.coordinates import SkyCoord
+        simbad_table = Simbad.query_object(galaxy_name)
+        return SkyCoord('%s %s' % (simbad_table['RA'].value[0], simbad_table['DEC'].value[0]), unit=(u.hourangle, u.deg))
 
 class PhysParams:
     """
@@ -295,10 +296,10 @@ class PhysParams:
         """
         distances need to be done!!!!! See Lee et al 2022 Table 1
         """
-        self.dist_dict = {
-            'ngc0628': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
-            'ngc7496': {'dist': 18.72, 'dist_err': 2.81, 'method': 'NAM'}
-        }
+        # self.dist_dict = {
+        #     'ngc0628': {'dist': 9.84, 'dist_err': 0.63, 'method': 'TRGB'},
+        #     'ngc7496': {'dist': 18.72, 'dist_err': 2.81, 'method': 'NAM'}
+        # }
         self.sr_per_square_deg = 0.00030461741978671  # steradians per square degree
 
         # zero point NIRCAM flux corrections for data from the pipeline version v0p4p2
