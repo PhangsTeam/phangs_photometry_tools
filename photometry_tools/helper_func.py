@@ -16,30 +16,44 @@ from lmfit import Model
 import numpy as np
 
 
-def identify_file_in_folder(folder_path, str_in_file_name):
+def identify_file_in_folder(folder_path, str_in_file_name_1, str_in_file_name_2=None):
     """
     Identify a file inside a folder that contains a specific string.
 
     Parameters
     ----------
     folder_path : Path or str
-    str_in_file_name : str
+    str_in_file_name_1 : str
+    str_in_file_name_2 : str
 
     Returns
     -------
     file_name : Path
     """
 
+    if str_in_file_name_2 is None:
+        str_in_file_name_2 = str_in_file_name_1
+
     if isinstance(folder_path, str):
         folder_path = Path(folder_path)
-    identified_files = list(filter(lambda x: str_in_file_name in x, os.listdir(folder_path)))
-    if not identified_files:
-        raise FileNotFoundError('The data file containing the string %s does not exist.' % str_in_file_name)
-    elif len(identified_files) > 1:
-        raise FileExistsError('There are more than one data files containing the string %s .' % str_in_file_name)
-    else:
-        return folder_path / str(identified_files[0])
+    identified_files_1 = list(filter(lambda x: str_in_file_name_1 in x, os.listdir(folder_path)))
 
+    identified_files_2 = list(filter(lambda x: str_in_file_name_2 in x, os.listdir(folder_path)))
+
+    if not identified_files_1 and not identified_files_2:
+        raise FileNotFoundError('The data file containing the string %s or %s does not exist.' %
+                                (str_in_file_name_1, str_in_file_name_2))
+    elif len(identified_files_1) > 1:
+        raise FileExistsError('There are more than one data files containing the string %s .' % str_in_file_name_1)
+    elif len(identified_files_2) > 1:
+        raise FileExistsError('There are more than one data files containing the string %s .' % str_in_file_name_2)
+    else:
+        if not identified_files_2:
+            return folder_path / str(identified_files_1[0])
+        if not identified_files_1:
+            return folder_path / str(identified_files_2[0])
+        if identified_files_1 and identified_files_2:
+            return folder_path / str(identified_files_1[0])
 
 def load_img(file_name, hdu_number=0):
     """function to open hdu using astropy.

@@ -771,23 +771,25 @@ def arrange_text(ax, data_shape, text, axis_offset_x=0.1, axis_offset_y=0.85, fo
 
 def arr_axis_params(ax, ra_tick_label=True, dec_tick_label=True,
                     ra_axis_label='R.A. (2000.0)', dec_axis_label='DEC. (2000.0)',
-                    ra_minpad=0.8, dec_minpad=0.8, tick_color='k',
+                    ra_minpad=0.8, dec_minpad=0.8, tick_color='k', label_color='k',
                     fontsize=15, labelsize=14, ra_tick_num=3, dec_tick_num=3):
+
     ax.tick_params(axis='both', which='both', width=1.5, length=7, direction='in', color=tick_color,
                    labelsize=labelsize)
 
     if not ra_tick_label:
         ax.coords['ra'].set_ticklabel_visible(False)
-        ax.coords['ra'].set_axislabel(' ')
+        ax.coords['ra'].set_axislabel(' ', color=label_color)
     else:
-        ax.coords['ra'].set_axislabel(ra_axis_label, minpad=ra_minpad, fontsize=fontsize)
+        ax.coords['ra'].set_ticklabel(rotation=0, color=label_color)
+        ax.coords['ra'].set_axislabel(ra_axis_label, minpad=ra_minpad, color=label_color, fontsize=fontsize)
 
     if not dec_tick_label:
         ax.coords['dec'].set_ticklabel_visible(False)
-        ax.coords['dec'].set_axislabel(' ')
+        ax.coords['dec'].set_axislabel(' ', color=label_color)
     else:
-        ax.coords['dec'].set_ticklabel(rotation=90)
-        ax.coords['dec'].set_axislabel(dec_axis_label, minpad=dec_minpad, fontsize=fontsize)
+        ax.coords['dec'].set_ticklabel(rotation=90, color=label_color)
+        ax.coords['dec'].set_axislabel(dec_axis_label, minpad=dec_minpad, color=label_color, fontsize=fontsize)
 
     ax.coords['ra'].set_ticks(number=ra_tick_num)
     ax.coords['ra'].display_minor_ticks(True)

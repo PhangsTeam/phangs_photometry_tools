@@ -92,7 +92,7 @@ class PhangsDataStructure:
         self.hst_targets = {
             'ngc0628':
                 {'folder_name': 'ngc628mosaic',
-                 'acs_wfc1_observed_bands': ['F435W', 'F814W'],
+                 'acs_wfc1_observed_bands': ['F435W', 'F658N', 'F814W'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
             'ngc0628e':
                 {'folder_name': 'ngc628mosaic',

@@ -74,11 +74,13 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         if hst_data_folder is None:
             hst_data_folder = (self.hst_data_path / self.hst_ver_folder_names[self.hst_data_ver] /
                                self.hst_targets[self.target_name]['folder_name'])
-        ending_of_band_file = '%s_%s_exp-drc-sci.fits' % (band.lower(), self.hst_data_ver)
+        ending_of_band_file_1 = '%s_%s_exp-drc-sci.fits' % (band.lower(), self.hst_data_ver)
+        ending_of_band_file_2 = '%s_exp_drc_sci.fits' % (band.lower())
 
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=hst_data_folder,
-                                                       str_in_file_name=ending_of_band_file)
+                                                       str_in_file_name_1=ending_of_band_file_1,
+                                                       str_in_file_name_2=ending_of_band_file_2)
         else:
             return Path(hst_data_folder) / Path(file_name)
 
@@ -105,7 +107,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
 
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=hst_data_folder,
-                                                       str_in_file_name=ending_of_band_file)
+                                                       str_in_file_name_1=ending_of_band_file)
         else:
             return Path(hst_data_folder) / Path(file_name)
 
@@ -137,7 +139,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             ending_of_band_file = 'nircam_lv3_%s_i2d_align.fits' % band.lower()
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=nircam_data_folder,
-                                                       str_in_file_name=ending_of_band_file)
+                                                       str_in_file_name_1=ending_of_band_file)
         else:
             return Path(nircam_data_folder) / Path(file_name)
 
@@ -166,7 +168,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             ending_of_band_file = '%s_miri_%s_anchored.fits' % (self.target_name, band.lower())
         if file_name is None:
             return helper_func.identify_file_in_folder(folder_path=miri_data_folder,
-                                                       str_in_file_name=ending_of_band_file)
+                                                       str_in_file_name_1=ending_of_band_file)
         else:
             return Path(miri_data_folder) / Path(file_name)
 
@@ -540,6 +542,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         new_unit : str
         """
         if band in list(set(self.hst_acs_wfc1_bands + self.hst_wfc3_uvis2_bands)):
+
             old_unit = self.hst_bands_data['%s_unit_img' % band]
             conversion_factor = 1
             # change to Jy
@@ -548,7 +551,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in old_unit:
                 conversion_factor *= 1e6
             if '/sr' in old_unit:
-                conversion_factor *= self.hst_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor *= self.hst_bands_data['%s_pixel_area_size_sr_img' % band]
 
             # change to the new unit
             if 'm' in new_unit:
@@ -556,7 +559,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in new_unit:
                 conversion_factor *= 1e-6
             if '/sr' in new_unit:
-                conversion_factor /= self.hst_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor /= self.hst_bands_data['%s_pixel_area_size_sr_img' % band]
 
             self.hst_bands_data['%s_data_img' % band] *= conversion_factor
             self.hst_bands_data['%s_unit_img' % band] = new_unit
@@ -574,7 +577,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in old_unit:
                 conversion_factor *= 1e6
             if '/sr' in old_unit:
-                conversion_factor *= self.nircam_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor *= self.nircam_bands_data['%s_pixel_area_size_sr_img' % band]
 
             # change to the new unit
             if 'm' in new_unit:
@@ -582,7 +585,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in new_unit:
                 conversion_factor *= 1e-6
             if '/sr' in new_unit:
-                conversion_factor /= self.nircam_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor /= self.nircam_bands_data['%s_pixel_area_size_sr_img' % band]
 
             self.nircam_bands_data['%s_data_img' % band] *= conversion_factor
             self.nircam_bands_data['%s_unit_img' % band] = new_unit
@@ -601,7 +604,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in old_unit:
                 conversion_factor *= 1e6
             if '/sr' in old_unit:
-                conversion_factor *= self.miri_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor *= self.miri_bands_data['%s_pixel_area_size_sr_img' % band]
 
             # change to the new unit
             if 'm' in new_unit:
@@ -609,7 +612,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
             if 'M' in new_unit:
                 conversion_factor *= 1e-6
             if '/sr' in new_unit:
-                conversion_factor /= self.miri_bands_data['%s_pixel_area_size_sr_err' % band]
+                conversion_factor /= self.miri_bands_data['%s_pixel_area_size_sr_img' % band]
 
             self.miri_bands_data['%s_data_img' % band] *= conversion_factor
             self.miri_bands_data['%s_unit_img' % band] = new_unit
@@ -751,7 +754,7 @@ class PhotAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysPara
         return list(np.array(band_list)[sort])
 
 
-class CatalogAccess(basic_attributes.PhangsDataStructure):
+class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysParams):
     """
     Access class to organize data structure of all kinds of data tables/catalogs
     """
@@ -881,8 +884,11 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
     def get_hst_cc_band_vega_mag_err(self, target, band, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_%s_VEGA_TOT_ERR' % band]
 
-    def get_hst_color_ub(self, target, classify='human', cluster_class='class12'):
+    def get_hst_cc_band_ab_mag(self, target, band, classify='human', cluster_class='class12'):
+        flux = self.get_hst_cc_band_flux(target=target, band=band, classify=classify, cluster_class=cluster_class)
+        return helper_func.conv_mjy2ab_mag(flux=flux)
 
+    def get_hst_color_ub_vega(self, target, classify='human', cluster_class='class12'):
         color_u = self.get_hst_cc_band_vega_mag(target=target, band='F336W', classify=classify,
                                                 cluster_class=cluster_class)
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
@@ -894,7 +900,46 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         return color_u - color_b
 
-    def get_hst_color_nuvb(self, target, classify='human', cluster_class='class12'):
+    def get_hst_color_ub_ab(self, target, classify='human', cluster_class='class12'):
+        color_u = self.get_hst_cc_band_ab_mag(target=target, band='F336W', classify=classify,
+                                                cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_ab_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_ab_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        return color_u - color_b
+
+    def get_hst_color_bv_vega(self, target, classify='human', cluster_class='class12'):
+
+        color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify,
+                                                cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        return color_b -color_v
+
+
+    def get_hst_color_ub_err(self, target, classify='human', cluster_class='class12'):
+
+        color_u_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F336W', classify=classify,
+                                                cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        return np.sqrt(color_u_err**2 + color_b_err**2)
+
+    def get_hst_color_nuvb_vega(self, target, classify='human', cluster_class='class12'):
 
         color_nuv = self.get_hst_cc_band_vega_mag(target=target, band='F275W', classify=classify,
                                                   cluster_class=cluster_class)
@@ -907,7 +952,20 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         return color_nuv - color_b
 
-    def get_hst_color_nuvu(self, target, classify='human', cluster_class='class12'):
+    def get_hst_color_nuvb_ab(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv = self.get_hst_cc_band_ab_mag(target=target, band='F275W', classify=classify,
+                                                  cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_ab_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_ab_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        return color_nuv - color_b
+
+    def get_hst_color_nuvu_vega(self, target, classify='human', cluster_class='class12'):
 
         color_nuv = self.get_hst_cc_band_vega_mag(target=target, band='F275W', classify=classify,
                                                   cluster_class=cluster_class)
@@ -916,7 +974,16 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         return color_nuv - color_u
 
-    def get_hst_color_vi(self, target, classify='human', cluster_class='class12'):
+    def get_hst_color_nuvu_ab(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv = self.get_hst_cc_band_ab_mag(target=target, band='F275W', classify=classify,
+                                                  cluster_class=cluster_class)
+        color_u = self.get_hst_cc_band_ab_mag(target=target, band='F336W', classify=classify,
+                                                cluster_class=cluster_class)
+
+        return color_nuv - color_u
+
+    def get_hst_color_vi_vega(self, target, classify='human', cluster_class='class12'):
 
         color_v = self.get_hst_cc_band_vega_mag(target=target, band='F555W', classify=classify,
                                                 cluster_class=cluster_class)
@@ -924,6 +991,24 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
                                                 cluster_class=cluster_class)
 
         return color_v - color_i
+
+    def get_hst_color_vi_ab(self, target, classify='human', cluster_class='class12'):
+
+        color_v = self.get_hst_cc_band_ab_mag(target=target, band='F555W', classify=classify,
+                                                cluster_class=cluster_class)
+        color_i = self.get_hst_cc_band_ab_mag(target=target, band='F814W', classify=classify,
+                                                cluster_class=cluster_class)
+
+        return color_v - color_i
+
+    def get_hst_color_vi_err(self, target, classify='human', cluster_class='class12'):
+
+        color_v_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F555W', classify=classify,
+                                                cluster_class=cluster_class)
+        color_i_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F814W', classify=classify,
+                                                cluster_class=cluster_class)
+
+        return np.sqrt(color_v_err**2 + color_i_err**2)
 
     def load_hst_obs_hdr(self, target):
         if self.hst_obs_hdr_file_path is None:
@@ -1181,7 +1266,7 @@ class CatalogAccess(basic_attributes.PhangsDataStructure):
 
         hdu_sample_table = fits.open(path_sample_table)
         data_sample_table = hdu_sample_table[1].data
-        print(data_sample_table.names)
+        #print(data_sample_table.names)
 
         target_names = data_sample_table['name']
         sfr = data_sample_table['props_sfr']
