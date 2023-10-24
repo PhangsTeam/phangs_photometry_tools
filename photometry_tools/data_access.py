@@ -759,8 +759,9 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     Access class to organize data structure of all kinds of data tables/catalogs
     """
 
-    def __init__(self, hst_cc_data_path=None, hst_obs_hdr_file_path=None, hst_cc_ver='IR4', morph_mask_path=None,
-                 morph_mask_ver='v5', sample_table_path=None, sample_table_ver='v1p6'):
+    def __init__(self, hst_cc_data_path=None, hst_obs_hdr_file_path=None, hst_cc_ver='phangs_hst_cc_dr4_cr2',
+                 morph_mask_path=None, morph_mask_ver='v5',
+                 sample_table_path=None, sample_table_ver='v1p6'):
         """
 
         """
@@ -782,23 +783,49 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
 
     def load_hst_cc_catalog(self, target, classify='human', cluster_class='class12'):
 
-        if (target[0:3] == 'ngc') & (target[3] == '0'):
+        if (target[0:3] == 'ngc') & (target[3] == '0') & (self.hst_cc_ver != 'phangs_hst_cc_dr4_cr2'):
             target_string = target[0:3] + target[4:]
         else:
             target_string = target
 
-        if cluster_class == 'candidates':
-            folder_str = 'InteractiveDisplay'
-            file_string = Path('%s_phangshst_candidates_bcw_v1p2_%s.fits' % (target_string, self.hst_cc_ver))
-        else:
-            folder_str = cluster_class
-            file_string = Path( 'PHANGS_%s_%s_phangs_hst_v1p2_%s_%s.fits' % (self.hst_cc_ver, target_string, classify,
-                                                                             cluster_class))
+        if self.hst_cc_ver == 'IR4':
+            if cluster_class == 'candidates':
+                folder_str = Path(self.hst_cc_ver) / Path('InteractiveDisplay')
+                file_string = Path('%s_phangshst_candidates_bcw_v1p2_%s.fits' % (target_string, self.hst_cc_ver))
+            else:
+                file_string = Path(
+                    'PHANGS_%s_%s_phangs_hst_v1p2_%s_%s.fits' % (self.hst_cc_ver, target_string, classify,
+                                                                 cluster_class))
+                folder_str = Path(self.hst_cc_ver) / Path(cluster_class)
+        elif self.hst_cc_ver == 'SEDfix_final_test_catalogs':
+            if cluster_class == 'candidates':
+                'SEDfix_ngc4571_Ha1_inclusiveGCcc_inclusiveGCclass_phangshst_candidates_bcw_v1p2_IR4'
+                file_string = Path('SEDfix_%s_Ha1_inclusiveGCcc_inclusiveGCclass_phangshst_candidates_bcw_v1p2_IR4.fits'
+                                   % target_string)
+            else:
+                file_string = Path('SEDfix_PHANGS_IR4_%s_Ha1_inclusiveGCcc_inclusiveGCclass_phangs_hst_v1p2_%s_%s.fits'
+                                   % (target_string, classify, cluster_class))
 
-        cluster_dict_path = Path(self.hst_cc_data_path) / Path(self.hst_cc_ver) / Path(folder_str)
+            folder_str = ''
+        else:
+            if cluster_class == 'candidates':
+                # other convention for the candidates
+                if (target_string[0:3] == 'ngc') & (target_string[3] == '0'):
+                    target_string = target[0:3] + target[4:]
+                else:
+                    target_string = target
+
+                folder_str = Path('candidates')
+
+                file_string = Path('%s_phangshst_candidates_bcw_v1p2_IR4.fits' % target_string)
+            else:
+                folder_str = Path(self.hst_cc_ver)
+                file_string = Path('PHANGS_HST_cluster_catalog_dr_4_cat_release_2_%s_%s_%s.fits'
+                                   % (target_string, classify, cluster_class))
+
+        cluster_dict_path = Path(self.hst_cc_data_path) / folder_str
 
         file_path = cluster_dict_path / file_string
-
         if not os.path.isfile(file_path):
             print(file_path, ' not found ! ')
             raise FileNotFoundError('there is no HST cluster catalog for the target ', target,
@@ -815,7 +842,14 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
             self.hst_cc_data.update({str(target) + '_' + classify + '_' + cluster_class: cluster_catalog})
 
     def get_hst_cc_phangs_id(self, target, classify='human', cluster_class='class12'):
-        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['ID_PHANGS_CLUSTERS']
+        if self.hst_cc_ver == 'IR4':
+            id_string = 'ID_PHANGS_CLUSTERS'
+        else:
+            id_string = 'ID_PHANGS_CLUSTERS_v1p2'
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class][id_string]
+
+    def get_hst_cc_index(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['INDEX']
 
     def get_hst_cc_coords_pix(self, target, classify='human', cluster_class='class12'):
         x = self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_X']
@@ -836,20 +870,41 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     def get_hst_cc_class_ml_vgg_qual(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_CLUSTER_CLASS_ML_VGG_QUAL']
 
+    def get_h_alpha_medsub(self, target, classify='human', cluster_class='class12'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['NBHa_intensity_medsub']
+
     def get_hst_cc_age(self, target, classify='human', cluster_class='class12'):
-        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_AGE_MINCHISQ']
+        if self.hst_cc_ver == 'IR4':
+            age_string = 'PHANGS_AGE_MINCHISQ'
+        else:
+            age_string = 'SEDfix_age'
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class][age_string]
 
     def get_hst_cc_age_err(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ_ERR']
 
+    def get_hst_cc_age_young_mode(self, target, classify='human', cluster_class='class12', met='Z'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['mm_%s_youngestmode_age' % met]
+
+    def get_hst_cc_age_likely_mode(self, target, classify='human', cluster_class='class12', met='Z'):
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['mm_%s_bestmode_age' % met]
+
     def get_hst_cc_stellar_m(self, target, classify='human', cluster_class='class12'):
-        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ']
+        if self.hst_cc_ver == 'IR4':
+            stellar_m_string = 'PHANGS_MASS_MINCHISQ'
+        else:
+            stellar_m_string = 'SEDfix_mass'
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class][stellar_m_string]
 
     def get_hst_cc_stellar_m_err(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_MASS_MINCHISQ_ERR']
 
     def get_hst_cc_ebv(self, target, classify='human', cluster_class='class12'):
-        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_EBV_MINCHISQ']
+        if self.hst_cc_ver == 'IR4':
+            ebv_string = 'PHANGS_EBV_MINCHISQ'
+        else:
+            ebv_string = 'SEDfix_ebv'
+        return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class][ebv_string]
 
     def get_hst_cc_ebv_err(self, target, classify='human', cluster_class='class12'):
         return self.hst_cc_data[str(target) + '_' + classify + '_' + cluster_class]['PHANGS_EBV_MINCHISQ_ERR']
@@ -902,13 +957,13 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
 
     def get_hst_color_ub_ab(self, target, classify='human', cluster_class='class12'):
         color_u = self.get_hst_cc_band_ab_mag(target=target, band='F336W', classify=classify,
-                                                cluster_class=cluster_class)
+                                              cluster_class=cluster_class)
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
             color_b = self.get_hst_cc_band_ab_mag(target=target, band='F438W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                  cluster_class=cluster_class)
         else:
             color_b = self.get_hst_cc_band_ab_mag(target=target, band='F435W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                  cluster_class=cluster_class)
 
         return color_u - color_b
 
@@ -923,26 +978,67 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
             color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify,
                                                     cluster_class=cluster_class)
 
-        return color_b -color_v
+        return color_b - color_v
 
+    def get_hst_color_bi_vega(self, target, classify='human', cluster_class='class12'):
+
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify,
+                                                    cluster_class=cluster_class)
+        else:
+            color_b = self.get_hst_cc_band_vega_mag(target=target, band='F435W', classify=classify,
+                                                    cluster_class=cluster_class)
+
+        color_i = self.get_hst_cc_band_vega_mag(target=target, band='F814W', classify=classify,
+                                                cluster_class=cluster_class)
+
+        return color_b - color_i
 
     def get_hst_color_ub_err(self, target, classify='human', cluster_class='class12'):
 
         color_u_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F336W', classify=classify,
-                                                cluster_class=cluster_class)
+                                                        cluster_class=cluster_class)
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
             color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F438W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                            cluster_class=cluster_class)
         else:
             color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F435W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                            cluster_class=cluster_class)
 
-        return np.sqrt(color_u_err**2 + color_b_err**2)
+        return np.sqrt(color_u_err ** 2 + color_b_err ** 2)
+
+    def get_hst_color_bv_err(self, target, classify='human', cluster_class='class12'):
+
+        color_v_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F555W', classify=classify,
+                                                        cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F438W', classify=classify,
+                                                            cluster_class=cluster_class)
+        else:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F435W', classify=classify,
+                                                            cluster_class=cluster_class)
+
+        return np.sqrt(color_v_err ** 2 + color_b_err ** 2)
+
+    def get_hst_color_bi_err(self, target, classify='human', cluster_class='class12'):
+
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F438W', classify=classify,
+                                                            cluster_class=cluster_class)
+        else:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F435W', classify=classify,
+                                                            cluster_class=cluster_class)
+
+        color_i_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F814W', classify=classify,
+                                                        cluster_class=cluster_class)
+
+        return np.sqrt(color_i_err ** 2 + color_b_err ** 2)
 
     def get_hst_color_nuvb_vega(self, target, classify='human', cluster_class='class12'):
 
         color_nuv = self.get_hst_cc_band_vega_mag(target=target, band='F275W', classify=classify,
                                                   cluster_class=cluster_class)
+
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
             color_b = self.get_hst_cc_band_vega_mag(target=target, band='F438W', classify=classify,
                                                     cluster_class=cluster_class)
@@ -955,15 +1051,28 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     def get_hst_color_nuvb_ab(self, target, classify='human', cluster_class='class12'):
 
         color_nuv = self.get_hst_cc_band_ab_mag(target=target, band='F275W', classify=classify,
-                                                  cluster_class=cluster_class)
+                                                cluster_class=cluster_class)
         if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
             color_b = self.get_hst_cc_band_ab_mag(target=target, band='F438W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                  cluster_class=cluster_class)
         else:
             color_b = self.get_hst_cc_band_ab_mag(target=target, band='F435W', classify=classify,
-                                                    cluster_class=cluster_class)
+                                                  cluster_class=cluster_class)
 
         return color_nuv - color_b
+
+    def get_hst_color_nuvb_err(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F275W', classify=classify,
+                                                          cluster_class=cluster_class)
+        if 'F438W' in self.hst_targets[target]['wfc3_uvis_observed_bands']:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F438W', classify=classify,
+                                                            cluster_class=cluster_class)
+        else:
+            color_b_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F435W', classify=classify,
+                                                            cluster_class=cluster_class)
+
+        return np.sqrt(color_nuv_err ** 2 + color_b_err ** 2)
 
     def get_hst_color_nuvu_vega(self, target, classify='human', cluster_class='class12'):
 
@@ -977,11 +1086,20 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     def get_hst_color_nuvu_ab(self, target, classify='human', cluster_class='class12'):
 
         color_nuv = self.get_hst_cc_band_ab_mag(target=target, band='F275W', classify=classify,
-                                                  cluster_class=cluster_class)
-        color_u = self.get_hst_cc_band_ab_mag(target=target, band='F336W', classify=classify,
                                                 cluster_class=cluster_class)
+        color_u = self.get_hst_cc_band_ab_mag(target=target, band='F336W', classify=classify,
+                                              cluster_class=cluster_class)
 
         return color_nuv - color_u
+
+    def get_hst_color_nuvu_err(self, target, classify='human', cluster_class='class12'):
+
+        color_nuv_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F275W', classify=classify,
+                                                          cluster_class=cluster_class)
+        color_u_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F336W', classify=classify,
+                                                        cluster_class=cluster_class)
+
+        return np.sqrt(color_nuv_err ** 2 + color_u_err ** 2)
 
     def get_hst_color_vi_vega(self, target, classify='human', cluster_class='class12'):
 
@@ -995,20 +1113,20 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     def get_hst_color_vi_ab(self, target, classify='human', cluster_class='class12'):
 
         color_v = self.get_hst_cc_band_ab_mag(target=target, band='F555W', classify=classify,
-                                                cluster_class=cluster_class)
+                                              cluster_class=cluster_class)
         color_i = self.get_hst_cc_band_ab_mag(target=target, band='F814W', classify=classify,
-                                                cluster_class=cluster_class)
+                                              cluster_class=cluster_class)
 
         return color_v - color_i
 
     def get_hst_color_vi_err(self, target, classify='human', cluster_class='class12'):
 
         color_v_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F555W', classify=classify,
-                                                cluster_class=cluster_class)
+                                                        cluster_class=cluster_class)
         color_i_err = self.get_hst_cc_band_vega_mag_err(target=target, band='F814W', classify=classify,
-                                                cluster_class=cluster_class)
+                                                        cluster_class=cluster_class)
 
-        return np.sqrt(color_v_err**2 + color_i_err**2)
+        return np.sqrt(color_v_err ** 2 + color_i_err ** 2)
 
     def load_hst_obs_hdr(self, target):
         if self.hst_obs_hdr_file_path is None:
@@ -1035,6 +1153,24 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
             return np.array(header_df['zpAB'].to_list())[mask_filter]
         else:
             raise KeyError('mag_sys must be vega or AB')
+
+    def get_hst_exp_time(self, target, band):
+        header_df = self.load_hst_obs_hdr(target=target)
+        filter_set = np.array(header_df['filter'].to_list())
+        mask_filter = filter_set == band
+        return np.array(header_df['exptime'].to_list())[mask_filter]
+
+    def get_hst_n_pointig(self, target, band):
+        header_df = self.load_hst_obs_hdr(target=target)
+        filter_set = np.array(header_df['filter'].to_list())
+        mask_filter = filter_set == band
+        return np.array(header_df['number'].to_list())[mask_filter]
+
+    def get_hst_band_detector(self, target, band):
+        header_df = self.load_hst_obs_hdr(target=target)
+        filter_set = np.array(header_df['filter'].to_list())
+        mask_filter = filter_set == band
+        return np.array(header_df['detector'].to_list())[mask_filter]
 
     @staticmethod
     def locate_morph_map(str_map, digit_position, str_code):
@@ -1118,7 +1254,8 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
             dist_to_centre = np.sqrt((x_coords - central_pos_pix[0]) ** 2 + (y_coords - central_pos_pix[1]) ** 2)
 
             dist_to_centre[~mask_ring] = np.nan
-            ring_dist_hist, dist_bins = np.histogram(dist_to_centre[mask_ring], bins=np.linspace(0, max(dist_to_centre[mask_ring])))
+            ring_dist_hist, dist_bins = np.histogram(dist_to_centre[mask_ring],
+                                                     bins=np.linspace(0, max(dist_to_centre[mask_ring])))
             mask_ring_signal = ring_dist_hist > 0
             # ceter_of_dist_bins = (dist_bins[1:] + dist_bins[:-1]) / 2
 
@@ -1128,12 +1265,12 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
             in_ring_bool = False
             for index in range(len(ring_dist_hist)):
                 if mask_ring_signal[index] & np.invert(in_ring_bool):
-                    ring_min_rad.append(dist_bins[index-1])
+                    ring_min_rad.append(dist_bins[index - 1])
                     in_ring_bool = True
                     continue
 
                 if np.invert(mask_ring_signal[index]) & in_ring_bool:
-                    ring_max_rad.append(dist_bins[index+1])
+                    ring_max_rad.append(dist_bins[index + 1])
                     in_ring_bool = False
                     continue
 
@@ -1143,14 +1280,13 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
                                             (dist_to_centre < ring_max_rad[ring_index]) & mask_ring)
                 else:
                     mask_individual_ring = (dist_to_centre > ring_min_rad[ring_index]) & mask_ring
-                target_morph_dict.update({'presence_ring_%i' % (ring_index+1): True,
-                                          'mask_ring_%i' % (ring_index+1): mask_individual_ring})
+                target_morph_dict.update({'presence_ring_%i' % (ring_index + 1): True,
+                                          'mask_ring_%i' % (ring_index + 1): mask_individual_ring})
         else:
             target_morph_dict.update({'presence_ring_1': presence_ring})
             target_morph_dict.update({'mask_ring_1': mask_ring})
 
         # add general mask
-
 
         # old code which canot distinguish between different rings
         # ring_count = 1
@@ -1263,23 +1399,44 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
     def load_sample_table(self):
         path_sample_table = (self.sample_table_path + '/' + self.sample_table_ver +
                              '/phangs_sample_table_%s.fits' % self.sample_table_ver)
-
         hdu_sample_table = fits.open(path_sample_table)
         data_sample_table = hdu_sample_table[1].data
-        #print(data_sample_table.names)
 
         target_names = data_sample_table['name']
         sfr = data_sample_table['props_sfr']
         sfr_err = data_sample_table['props_sfr_unc']
         mstar = data_sample_table['props_mstar']
         mstar_err = data_sample_table['props_mstar_unc']
+        delta_ms = data_sample_table['props_deltams']
+        delta_ms_unc = data_sample_table['props_deltams_unc']
+
         inclination = data_sample_table['orient_incl']
         inclination_err = data_sample_table['orient_incl_unc']
 
+        agn_veron_y_n = data_sample_table['agn_veron_y_n']
+        agn_veron_class = data_sample_table['agn_veron_class']
+        agn_milliquas_y_n = data_sample_table['agn_milliquas_y_n']
+        agn_milliquas_class_pQSO = data_sample_table['agn_milliquas_class_pQSO']
+
         self.sample_table.update({
             'target_names': target_names, 'sfr': sfr, 'sfr_err': sfr_err, 'mstar': mstar, 'mstar_err': mstar_err,
-            'inclination': inclination, 'inclination_err': inclination_err
+            'delta_ms': delta_ms, 'delta_ms_unc': delta_ms_unc,
+            'inclination': inclination, 'inclination_err': inclination_err,
+            'agn_veron_y_n': agn_veron_y_n, 'agn_veron_class': agn_veron_class,
+            'agn_milliquas_y_n': agn_milliquas_y_n, 'agn_milliquas_class_pQSO': agn_milliquas_class_pQSO,
         })
+
+    def get_target_veron_class(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['agn_veron_class'][mask_target][0]
+
+    def get_target_milliquas_class(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['agn_milliquas_class_pQSO'][mask_target][0]
 
     def get_target_sfr(self, target):
         if not 'target_names' in self.sample_table.keys():
@@ -1316,12 +1473,15 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
         mstar = self.get_target_mstar(target=target)
         mstar_err = self.get_target_mstar_err(target=target)
 
-        return np.sqrt((sfr_err/mstar)**2 + (sfr * mstar_err / (mstar**2))**2)
+        return np.sqrt((sfr_err / mstar) ** 2 + (sfr * mstar_err / (mstar ** 2)) ** 2)
 
     def get_target_log_ssfr(self, target):
         sfr = np.log10(self.get_target_sfr(target=target))
         mstar = np.log10(self.get_target_mstar(target=target))
         return sfr - mstar
+
+    def get_target_log_sfr(self, target):
+        return np.log10(self.get_target_sfr(target=target))
 
     def get_target_log_ssfr_err(self, target):
         sfr = self.get_target_sfr(target=target)
@@ -1329,7 +1489,19 @@ class CatalogAccess(basic_attributes.PhangsDataStructure, basic_attributes.PhysP
         mstar = self.get_target_mstar(target=target)
         mstar_err = self.get_target_mstar_err(target=target)
 
-        return np.sqrt((sfr_err/(sfr * np.log(10)))**2 + (mstar_err/(mstar * np.log(10)))**2)
+        return np.sqrt((sfr_err / (sfr * np.log(10))) ** 2 + (mstar_err / (mstar * np.log(10))) ** 2)
+
+    def get_target_delta_ms(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['delta_ms'][mask_target][0]
+
+    def get_target_delta_ms_err(self, target):
+        if not 'target_names' in self.sample_table.keys():
+            self.load_sample_table()
+        mask_target = self.sample_table['target_names'] == target
+        return self.sample_table['delta_ms_unc'][mask_target][0]
 
     def get_target_incl(self, target):
         if not 'target_names' in self.sample_table.keys():

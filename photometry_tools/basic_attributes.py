@@ -6,7 +6,7 @@ from scipy.signal import fftconvolve
 import numpy as np
 # import tensorflow as tf
 from pathlib import Path
-from zfit import Parameter
+# from zfit import Parameter
 
 
 class PhangsDataStructure:
@@ -152,7 +152,7 @@ class PhangsDataStructure:
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F438W', 'F555W', 'F814W']},
             'ngc1672':
                 {'folder_name': 'ngc1672mosaic',
-                 'acs_wfc1_observed_bands': ['F555W', 'F435W', 'F550M', 'F658N'],
+                 'acs_wfc1_observed_bands': ['F555W', 'F435W', 'F550M', 'F658N', 'F814W'],
                  'wfc3_uvis_observed_bands': ['F275W', 'F336W', 'F555W']},
             'ngc1792':
                 {'folder_name': 'ngc1792',
@@ -284,6 +284,7 @@ class PhangsDataStructure:
         from astropy.coordinates import SkyCoord
         simbad_table = Simbad.query_object(galaxy_name)
         return SkyCoord('%s %s' % (simbad_table['RA'].value[0], simbad_table['DEC'].value[0]), unit=(u.hourangle, u.deg))
+
 
 class PhysParams:
     """

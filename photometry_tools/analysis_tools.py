@@ -17,10 +17,10 @@ from astropy.stats import sigma_clipped_stats
 
 import os
 
-try:
-    import zfit
-except (ImportError, ModuleNotFoundError) as err:
-    print('zfit was not imported. Deblending functions are therefore not available')
+# try:
+#     import zfit
+# except (ImportError, ModuleNotFoundError) as err:
+#     print('zfit was not imported. Deblending functions are therefore not available')
 
 
 class AnalysisTools(data_access.PhotAccess):
